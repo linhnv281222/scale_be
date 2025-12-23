@@ -1,0 +1,145 @@
+package org.facenet.service.location;
+
+import lombok.RequiredArgsConstructor;
+import org.facenet.common.exception.AlreadyExistsException;
+import org.facenet.common.exception.ResourceNotFoundException;
+import org.facenet.common.exception.ValidationException;
+import org.facenet.dto.location.LocationDto;
+import org.facenet.entity.location.Location;
+import org.facenet.mapper.LocationMapper;
+import org.facenet.repository.location.LocationRepository;
+import org.facenet.repository.scale.ScaleRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Service implementation for Location operations
+ */
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class LocationServiceImpl implements LocationService {
+
+    private final LocationRepository locationRepository;
+    private final ScaleRepository scaleRepository;
+
+    @Override
+    public List<LocationDto.Response> getAllLocations() {
+        List<Location> locations = locationRepository.findAll();
+        return LocationMapper.toResponseDtoList(locations);
+    }
+
+    @Override
+    public List<LocationDto.Response> getLocationsTree() {
+        List<Location> allLocations = locationRepository.findAll();
+        return buildTree(allLocations);
+    }
+
+    @Override
+    public LocationDto.Response getLocationById(Long id) {
+        Location location = locationRepository.findByIdWithChildren(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
+        return LocationMapper.toResponseDto(location);
+    }
+
+    @Override
+    @Transactional
+    public LocationDto.Response createLocation(LocationDto.Request request) {
+        // Validate code uniqueness
+        if (locationRepository.existsByCode(request.getCode())) {
+            throw new AlreadyExistsException("Location", "code", request.getCode());
+        }
+
+        // Validate parent exists if provided
+        Location parent = null;
+        if (request.getParentId() != null) {
+            parent = locationRepository.findById(request.getParentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent location", "id", request.getParentId()));
+        }
+
+        Location location = Location.builder()
+                .code(request.getCode())
+                .name(request.getName())
+                .parent(parent)
+                .build();
+
+        location = locationRepository.save(location);
+        return LocationMapper.toResponseDto(location);
+    }
+
+    @Override
+    @Transactional
+    public LocationDto.Response updateLocation(Long id, LocationDto.Request request) {
+        Location location = locationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
+
+        // Check code uniqueness if changed
+        if (!location.getCode().equals(request.getCode()) &&
+            locationRepository.existsByCode(request.getCode())) {
+            throw new AlreadyExistsException("Location", "code", request.getCode());
+        }
+
+        // Validate parent exists if provided and not self
+        Location parent = null;
+        if (request.getParentId() != null) {
+            if (request.getParentId().equals(id)) {
+                throw new ValidationException("Location cannot be its own parent");
+            }
+            parent = locationRepository.findById(request.getParentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent location", "id", request.getParentId()));
+        }
+
+        location.setCode(request.getCode());
+        location.setName(request.getName());
+        location.setParent(parent);
+
+        location = locationRepository.save(location);
+        return LocationMapper.toResponseDto(location);
+    }
+
+    @Override
+    @Transactional
+    public void deleteLocation(Long id) {
+        Location location = locationRepository.findByIdWithChildren(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
+
+        // Check if has children
+        if (location.getChildren() != null && !location.getChildren().isEmpty()) {
+            throw new ValidationException("Cannot delete location with sub-locations. Found " + 
+                location.getChildren().size() + " sub-location(s)");
+        }
+
+        // Check if has scales
+        long scaleCount = scaleRepository.findByLocationId(id).size();
+        if (scaleCount > 0) {
+            throw new ValidationException("Cannot delete location with scales. Found " + scaleCount + " scale(s)");
+        }
+
+        locationRepository.delete(location);
+    }
+
+    private List<LocationDto.Response> buildTree(List<Location> locations) {
+        Map<Long, LocationDto.Response> locationMap = locations.stream()
+                .collect(Collectors.toMap(Location::getId, LocationMapper::toResponseDto));
+
+        List<LocationDto.Response> roots = locations.stream()
+                .filter(loc -> loc.getParent() == null)
+                .map(LocationMapper::toResponseDto)
+                .collect(Collectors.toList());
+
+        for (Location location : locations) {
+            if (location.getParent() != null) {
+                LocationDto.Response parentDto = locationMap.get(location.getParent().getId());
+                if (parentDto != null && parentDto.getChildren() != null) {
+                    parentDto.getChildren().add(locationMap.get(location.getId()));
+                }
+            }
+        }
+
+        return roots;
+    }
+}
