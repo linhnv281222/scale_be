@@ -25,6 +25,17 @@ public class RbacMapper {
                 .build();
     }
 
+    public static PermissionDto.Response toResponseDto(Permission permission) {
+        if (permission == null) return null;
+        return PermissionDto.Response.builder()
+                .id(permission.getId())
+                .code(permission.getCode())
+                .description(permission.getDescription())
+                .createdAt(permission.getCreatedAt())
+                .createdBy(permission.getCreatedBy())
+                .build();
+    }
+
     public static RoleDto.Simple toSimpleDto(Role role) {
         if (role == null) return null;
         return RoleDto.Simple.builder()

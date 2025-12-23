@@ -88,6 +88,10 @@ public class ScaleDto {
         @Schema(description = "Người cập nhật cuối (username)", example = "system")
         @JsonProperty("updated_by")
         private String updatedBy;
+
+        @Schema(description = "Cấu hình kỹ thuật của thiết bị cân")
+        @JsonProperty("scale_config")
+        private ScaleConfigDto.Response scaleConfig;
     }
 
     /**

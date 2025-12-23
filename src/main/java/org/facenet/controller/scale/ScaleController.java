@@ -63,7 +63,7 @@ public class ScaleController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<ScaleDto.Response>> getScaleById(
-            @Parameter(description = "ID của scale") @PathVariable Long id) {
+            @Parameter(description = "ID của scale", example = "1") @PathVariable("id") Long id) {
         ScaleDto.Response scale = scaleService.getScaleById(id);
         return ResponseEntity.ok(ApiResponse.success(scale));
     }
@@ -95,7 +95,7 @@ public class ScaleController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<ScaleDto.Response>> updateScale(
-            @Parameter(description = "ID của scale") @PathVariable Long id,
+            @Parameter(description = "ID của scale", example = "1") @PathVariable("id") Long id,
             @Valid @RequestBody ScaleDto.Request request) {
         ScaleDto.Response scale = scaleService.updateScale(id, request);
         return ResponseEntity.ok(ApiResponse.success(scale));
@@ -112,7 +112,7 @@ public class ScaleController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<Void> deleteScale(
-            @Parameter(description = "ID của scale") @PathVariable Long id) {
+            @Parameter(description = "ID của scale", example = "1") @PathVariable("id") Long id) {
         scaleService.deleteScale(id);
         return ResponseEntity.noContent().build();
     }

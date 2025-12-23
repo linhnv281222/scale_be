@@ -20,10 +20,26 @@ public class ScaleMapper {
                 .locationName(scale.getLocation() != null ? scale.getLocation().getName() : null)
                 .model(scale.getModel())
                 .isActive(scale.getIsActive())
+                .scaleConfig(scale.getConfig() != null ? toScaleConfigResponseDto(scale.getConfig()) : null)
                 .createdAt(scale.getCreatedAt())
                 .createdBy(scale.getCreatedBy())
                 .updatedAt(scale.getUpdatedAt())
                 .updatedBy(scale.getUpdatedBy())
+                .build();
+    }
+
+    private static ScaleConfigDto.Response toScaleConfigResponseDto(ScaleConfig config) {
+        if (config == null) return null;
+        return ScaleConfigDto.Response.builder()
+                .scaleId(config.getScale() != null ? config.getScale().getId() : null)
+                .protocol(config.getProtocol())
+                .pollInterval(config.getPollInterval())
+                .connParams(config.getConnParams())
+                .data1(config.getData1())
+                .data2(config.getData2())
+                .data3(config.getData3())
+                .data4(config.getData4())
+                .data5(config.getData5())
                 .build();
     }
 

@@ -64,7 +64,7 @@ public class LocationController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<LocationDto.Response>> getLocationById(
-            @Parameter(description = "ID của location") @PathVariable Long id) {
+            @Parameter(description = "ID của location", example = "1") @PathVariable("id") Long id) {
         LocationDto.Response location = locationService.getLocationById(id);
         return ResponseEntity.ok(ApiResponse.success(location));
     }
@@ -96,7 +96,7 @@ public class LocationController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<LocationDto.Response>> updateLocation(
-            @Parameter(description = "ID của location") @PathVariable Long id,
+            @Parameter(description = "ID của location", example = "1") @PathVariable("id") Long id,
             @Valid @RequestBody LocationDto.Request request) {
         LocationDto.Response location = locationService.updateLocation(id, request);
         return ResponseEntity.ok(ApiResponse.success(location));
@@ -115,7 +115,7 @@ public class LocationController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<Void> deleteLocation(
-            @Parameter(description = "ID của location") @PathVariable Long id) {
+            @Parameter(description = "ID của location", example = "1") @PathVariable("id") Long id) {
         locationService.deleteLocation(id);
         return ResponseEntity.noContent().build();
     }

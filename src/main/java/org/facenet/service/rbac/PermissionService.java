@@ -1,7 +1,6 @@
 package org.facenet.service.rbac;
 
 import org.facenet.dto.rbac.PermissionDto;
-import org.facenet.entity.rbac.Permission;
 
 import java.util.List;
 
@@ -13,20 +12,25 @@ public interface PermissionService {
     /**
      * Get all permissions
      */
-    List<PermissionDto> getAllPermissions();
+    List<PermissionDto.Response> getAllPermissions();
 
     /**
      * Get permission by ID
      */
-    PermissionDto getPermissionById(Integer id);
-
-    /**
-     * Get permission by code
-     */
-    Permission getPermissionByCode(String code);
+    PermissionDto.Response getPermissionById(Integer id);
 
     /**
      * Create a new permission
      */
-    PermissionDto createPermission(String code, String description);
+    PermissionDto.Response createPermission(PermissionDto.Request request);
+
+    /**
+     * Update an existing permission
+     */
+    PermissionDto.Response updatePermission(Integer id, PermissionDto.Request request);
+
+    /**
+     * Delete a permission
+     */
+    void deletePermission(Integer id);
 }

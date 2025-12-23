@@ -336,9 +336,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/rbac/users",
+              "raw": "{{base_url}}/users",
               "host": ["{{base_url}}"],
-              "path": ["rbac", "users"]
+              "path": ["users"]
             }
           }
         },
@@ -353,9 +353,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/rbac/roles",
+              "raw": "{{base_url}}/roles",
               "host": ["{{base_url}}"],
-              "path": ["rbac", "roles"]
+              "path": ["roles"]
             }
           }
         },
@@ -370,9 +370,76 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/rbac/permissions",
+              "raw": "{{base_url}}/permissions",
               "host": ["{{base_url}}"],
-              "path": ["rbac", "permissions"]
+              "path": ["permissions"]
+            }
+          }
+        },
+        {
+          "name": "Create Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"CREATE_SCALE\",\n  \"description\": \"Quyền tạo mới thiết bị cân\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions",
+              "host": ["{{base_url}}"],
+              "path": ["permissions"]
+            }
+          }
+        },
+        {
+          "name": "Update Permission",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"UPDATE_SCALE\",\n  \"description\": \"Quyền cập nhật thiết bị cân\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/1",
+              "host": ["{{base_url}}"],
+              "path": ["permissions", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Permission",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/permissions/1",
+              "host": ["{{base_url}}"],
+              "path": ["permissions", "1"]
             }
           }
         }

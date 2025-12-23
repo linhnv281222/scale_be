@@ -24,39 +24,65 @@ public class PermissionServiceImpl implements PermissionService {
     private final PermissionRepository permissionRepository;
 
     @Override
-    public List<PermissionDto> getAllPermissions() {
+    public List<PermissionDto.Response> getAllPermissions() {
         return permissionRepository.findAll()
                 .stream()
-                .map(RbacMapper::toDto)
+                .map(RbacMapper::toResponseDto)
                 .collect(Collectors.toList());
     }
 
     @Override
-    public PermissionDto getPermissionById(Integer id) {
+    public PermissionDto.Response getPermissionById(Integer id) {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
-        return RbacMapper.toDto(permission);
-    }
-
-    @Override
-    public Permission getPermissionByCode(String code) {
-        return permissionRepository.findByCode(code)
-                .orElseThrow(() -> new ResourceNotFoundException("Permission", "code", code));
+        return RbacMapper.toResponseDto(permission);
     }
 
     @Override
     @Transactional
-    public PermissionDto createPermission(String code, String description) {
-        if (permissionRepository.existsByCode(code)) {
-            throw new AlreadyExistsException("Permission", "code", code);
+    public PermissionDto.Response createPermission(PermissionDto.Request request) {
+        if (permissionRepository.existsByCode(request.getCode())) {
+            throw new AlreadyExistsException("Permission", "code", request.getCode());
         }
 
         Permission permission = Permission.builder()
-                .code(code)
-                .description(description)
+                .code(request.getCode())
+                .description(request.getDescription())
                 .build();
 
         permission = permissionRepository.save(permission);
-        return RbacMapper.toDto(permission);
+        return RbacMapper.toResponseDto(permission);
+    }
+
+    @Override
+    @Transactional
+    public PermissionDto.Response updatePermission(Integer id, PermissionDto.Request request) {
+        Permission permission = permissionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
+
+        // Check if code is being changed and if it conflicts
+        if (!permission.getCode().equals(request.getCode()) && permissionRepository.existsByCode(request.getCode())) {
+            throw new AlreadyExistsException("Permission", "code", request.getCode());
+        }
+
+        permission.setCode(request.getCode());
+        permission.setDescription(request.getDescription());
+
+        permission = permissionRepository.save(permission);
+        return RbacMapper.toResponseDto(permission);
+    }
+
+    @Override
+    @Transactional
+    public void deletePermission(Integer id) {
+        Permission permission = permissionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
+
+        // Check if permission is being used by any roles
+        if (!permission.getRolePermissions().isEmpty()) {
+            throw new org.facenet.common.exception.ValidationException("Cannot delete permission that is assigned to roles");
+        }
+
+        permissionRepository.delete(permission);
     }
 }
