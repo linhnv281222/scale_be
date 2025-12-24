@@ -46,7 +46,7 @@ public class RoleDto {
         private Integer id;
         private String name;
         private String code;
-        private List<PermissionDto> permissions;
+        private List<PermissionDto.Response> permissions;
         private OffsetDateTime createdAt;
         private String createdBy;
         private OffsetDateTime updatedAt;

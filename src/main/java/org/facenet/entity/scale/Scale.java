@@ -33,6 +33,9 @@ public class Scale extends Auditable {
     @Column(name = "model", length = 50)
     private String model;
 
+    @Column(name = "type", length = 50)
+    private String type;
+
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;

@@ -1,0 +1,161 @@
+package org.facenet.service.scale.core;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+import org.facenet.event.MeasurementEvent;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Core Processor - "Bộ não" xử lý dữ liệu
+ * 
+ * Theo thiết kế Module 3:
+ * - Core là "kẻ tham ăn" dữ liệu - thấy Queue có hàng là lấy ra ngay
+ * - Chạy trên các worker threads riêng biệt (4-8 threads)
+ * - KHÔNG block ứng dụng chính
+ * 
+ * Version 1 (V1): Chỉ ghi LOG để kiểm tra luồng dữ liệu
+ * Version 2 (V2): Xử lý nghiệp vụ + Push WebSocket realtime
+ */
+@Slf4j
+@Component
+public class CoreProcessor {
+    
+    private final BlockingQueue<MeasurementEvent> activeQueue;
+    private final ExecutorService coreProcessingExecutor;
+    private final SimpMessagingTemplate messagingTemplate;
+    private volatile boolean running = false;
+    
+    public CoreProcessor(
+            @Qualifier("measurementEventQueue") BlockingQueue<MeasurementEvent> activeQueue,
+            @Qualifier("coreProcessingExecutor") ExecutorService coreProcessingExecutor,
+            SimpMessagingTemplate messagingTemplate) {
+        this.activeQueue = activeQueue;
+        this.coreProcessingExecutor = coreProcessingExecutor;
+        this.messagingTemplate = messagingTemplate;
+    }
+    
+    /**
+     * Khởi động Core Processor khi ứng dụng ready
+     */
+    @PostConstruct
+    public void startProcessing() {
+        running = true;
+        log.info("[CORE] Starting Core Processor...");
+        
+        // Lấy số worker threads từ executor
+        // Default: 4-8 workers theo design spec
+        int numWorkers = 4; // Có thể config từ properties
+        
+        for (int i = 0; i < numWorkers; i++) {
+            final int workerId = i + 1;
+            coreProcessingExecutor.submit(() -> processEvents(workerId));
+        }
+        
+        log.info("[CORE] Started {} worker threads", numWorkers);
+    }
+    
+    /**
+     * Worker thread - chạy liên tục để xử lý events từ queue
+     */
+    private void processEvents(int workerId) {
+        log.info("[CORE-Worker-{}] Started", workerId);
+        
+        while (running) {
+            try {
+                // Lấy dữ liệu từ Queue (BLOCKING - sẽ đợi nếu queue trống)
+                MeasurementEvent event = activeQueue.take();
+                
+                // V1: Ghi LOG ra console để kiểm tra
+                logMeasurementEvent(workerId, event);
+                
+                // V2: BROADCAST qua WebSocket
+                broadcastMeasurement(event);
+                
+                // TODO V3: Xử lý nghiệp vụ đầy đủ
+                // - Chuẩn hóa dữ liệu
+                // - Áp dụng mapping register → metric
+                // - Xử lý trạng thái thiết bị
+                // - Lưu vào DB (measurements, device_events)
+                
+            } catch (InterruptedException e) {
+                log.warn("[CORE-Worker-{}] Interrupted, stopping...", workerId);
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                log.error("[CORE-Worker-{}] Error processing event: {}", workerId, e.getMessage(), e);
+                // Không throw exception để worker không bị chết
+            }
+        }
+        
+        log.info("[CORE-Worker-{}] Stopped", workerId);
+    }
+    
+    /**
+     * V2: Broadcast measurement qua WebSocket
+     * 
+     * Đẩy dữ liệu tới 2 loại topic:
+     * 1. /topic/scales - Topic toàn cục cho tất cả các cân (màn hình tổng quát)
+     * 2. /topic/scale/{scaleId} - Topic riêng lẻ cho từng cân (màn hình chi tiết)
+     */
+    private void broadcastMeasurement(MeasurementEvent event) {
+        try {
+            // Topic toàn cục: Tất cả các cân đẩy chung về đây
+            messagingTemplate.convertAndSend("/topic/scales", event);
+            
+            // Topic riêng lẻ: Chỉ đẩy dữ liệu của 1 cân cụ thể
+            messagingTemplate.convertAndSend("/topic/scale/" + event.getScaleId(), event);
+            
+            log.debug("[CORE] Broadcasted scale {} data to WebSocket", event.getScaleId());
+        } catch (Exception e) {
+            log.error("[CORE] Error broadcasting measurement for scale {}: {}", 
+                    event.getScaleId(), e.getMessage());
+            // Không throw để không ảnh hưởng luồng xử lý chính
+        }
+    }
+    
+    /**
+     * V1: Log measurement event để kiểm tra luồng dữ liệu
+     */
+    private void logMeasurementEvent(int workerId, MeasurementEvent event) {
+        log.info("=====================================");
+        log.info("[CORE-Worker-{}] Received measurement from Scale ID: {}", workerId, event.getScaleId());
+        log.info("[CORE-Worker-{}] Last Time: {}", workerId, event.getLastTime());
+        log.info("[CORE-Worker-{}] Status: {}", workerId, event.getStatus());
+        log.info("[CORE-Worker-{}] D1: {}", workerId, event.getData1() != null ? event.getData1() : "N/A");
+        log.info("[CORE-Worker-{}] D2: {}", workerId, event.getData2() != null ? event.getData2() : "N/A");
+        log.info("[CORE-Worker-{}] D3: {}", workerId, event.getData3() != null ? event.getData3() : "N/A");
+        log.info("[CORE-Worker-{}] D4: {}", workerId, event.getData4() != null ? event.getData4() : "N/A");
+        log.info("[CORE-Worker-{}] D5: {}", workerId, event.getData5() != null ? event.getData5() : "N/A");
+        log.info("=====================================");
+    }
+    
+    /**
+     * Dừng Core Processor khi ứng dụng shutdown
+     */
+    @PreDestroy
+    public void stopProcessing() {
+        log.info("[CORE] Stopping Core Processor...");
+        running = false;
+        
+        try {
+            coreProcessingExecutor.shutdown();
+            if (!coreProcessingExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                log.warn("[CORE] Forcing shutdown of core processing executor");
+                coreProcessingExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            log.error("[CORE] Error during shutdown", e);
+            coreProcessingExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        
+        log.info("[CORE] Core Processor stopped");
+    }
+}

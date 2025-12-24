@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.Map;
 
 /**
  * DTOs for WeighingLog and Report operations
@@ -28,11 +27,11 @@ public class WeighingDataDto {
         private String scaleName;
         private OffsetDateTime createdAt;
         private OffsetDateTime lastTime;
-        private Map<String, Object> data1;
-        private Map<String, Object> data2;
-        private Map<String, Object> data3;
-        private Map<String, Object> data4;
-        private Map<String, Object> data5;
+        private String data1;
+        private String data2;
+        private String data3;
+        private String data4;
+        private String data5;
     }
 
     /**
@@ -48,11 +47,11 @@ public class WeighingDataDto {
         private Long scaleId;
         private String scaleName;
         private OffsetDateTime lastTime;
-        private Map<String, Object> data1;
-        private Map<String, Object> data2;
-        private Map<String, Object> data3;
-        private Map<String, Object> data4;
-        private Map<String, Object> data5;
+        private String data1;
+        private String data2;
+        private String data3;
+        private String data4;
+        private String data5;
     }
 
     /**

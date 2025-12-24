@@ -1,9 +1,7 @@
 package org.facenet.entity.scale;
 
-import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -46,25 +44,20 @@ public class WeighingLog {
     @Column(name = "last_time", nullable = false)
     private OffsetDateTime lastTime;
 
-    @Type(JsonBinaryType.class)
-    @Column(name = "data_1", columnDefinition = "jsonb")
-    private Map<String, Object> data1;
+    @Column(name = "data_1")
+    private String data1;
 
-    @Type(JsonBinaryType.class)
-    @Column(name = "data_2", columnDefinition = "jsonb")
-    private Map<String, Object> data2;
+    @Column(name = "data_2")
+    private String data2;
 
-    @Type(JsonBinaryType.class)
-    @Column(name = "data_3", columnDefinition = "jsonb")
-    private Map<String, Object> data3;
+    @Column(name = "data_3")
+    private String data3;
 
-    @Type(JsonBinaryType.class)
-    @Column(name = "data_4", columnDefinition = "jsonb")
-    private Map<String, Object> data4;
+    @Column(name = "data_4")
+    private String data4;
 
-    @Type(JsonBinaryType.class)
-    @Column(name = "data_5", columnDefinition = "jsonb")
-    private Map<String, Object> data5;
+    @Column(name = "data_5")
+    private String data5;
 
     // Audit fields (manually managed since this entity doesn't extend Auditable)
     @Column(name = "updated_at")

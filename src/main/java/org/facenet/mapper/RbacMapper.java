@@ -14,9 +14,9 @@ import java.util.stream.Collectors;
  */
 public class RbacMapper {
 
-    public static PermissionDto toDto(Permission permission) {
+    public static PermissionDto.Response toDto(Permission permission) {
         if (permission == null) return null;
-        return PermissionDto.builder()
+        return PermissionDto.Response.builder()
                 .id(permission.getId())
                 .code(permission.getCode())
                 .description(permission.getDescription())

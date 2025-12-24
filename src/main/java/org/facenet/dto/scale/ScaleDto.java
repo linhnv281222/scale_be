@@ -128,22 +128,22 @@ public class ScaleDto {
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class StateDto {
-        @Schema(description = "Dữ liệu kênh 1", example = "{\"name\": \"Weight\", \"value\": 150.5}")
-        private Map<String, Object> data1;
+        @Schema(description = "Dữ liệu 1")
+        private String data1;
 
-        @Schema(description = "Dữ liệu kênh 2", example = "{\"name\": \"Status\", \"value\": 1}")
-        private Map<String, Object> data2;
+        @Schema(description = "Dữ liệu 2")
+        private String data2;
 
-        @Schema(description = "Dữ liệu kênh 3", example = "null")
-        private Map<String, Object> data3;
+        @Schema(description = "Dữ liệu 3")
+        private String data3;
 
-        @Schema(description = "Dữ liệu kênh 4", example = "null")
-        private Map<String, Object> data4;
+        @Schema(description = "Dữ liệu 4")
+        private String data4;
 
-        @Schema(description = "Dữ liệu kênh 5", example = "null")
-        private Map<String, Object> data5;
+        @Schema(description = "Dữ liệu 5")
+        private String data5;
 
-        @Schema(description = "Trạng thái kết nối", example = "CONNECTED")
+        @Schema(description = "Trạng thái kết nối")
         private String status;
 
         @Schema(description = "Thời gian cập nhật cuối", example = "2025-12-23T11:10:00Z")

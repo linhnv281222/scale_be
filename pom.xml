@@ -73,13 +73,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Hibernate Types for JSONB -->
-        <dependency>
-            <groupId>io.hypersistence</groupId>
-            <artifactId>hypersistence-utils-hibernate-63</artifactId>
-            <version>3.7.0</version>
-        </dependency>
-
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -99,17 +92,26 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Modbus Libraries -->
+        <!-- Hibernate Types for JSONB -->
         <dependency>
-            <groupId>com.digitalpetri.modbus</groupId>
-            <artifactId>modbus-master-tcp</artifactId>
-            <version>1.2.0</version>
+            <groupId>io.hypersistence</groupId>
+            <artifactId>hypersistence-utils-hibernate-63</artifactId>
+            <version>3.8.2</version>
         </dependency>
 
+        <!-- Modbus Libraries -->
+        <!-- jlibmodbus - Thư viện Modbus TCP/RTU chính -->
+        <dependency>
+            <groupId>com.intelligt.modbus</groupId>
+            <artifactId>jlibmodbus</artifactId>
+            <version>1.2.9.7</version>
+        </dependency>
+
+        <!-- jSerialComm - Để đọc cổng Serial (COM port) cho Modbus RTU -->
         <dependency>
             <groupId>com.fazecast</groupId>
             <artifactId>jSerialComm</artifactId>
-            <version>2.10.4</version>
+            <version>2.10.3</version>
         </dependency>
 
         <!-- Apache Commons -->

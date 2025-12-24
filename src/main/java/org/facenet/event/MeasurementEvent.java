@@ -5,12 +5,11 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
-import java.util.Map;
+import java.time.ZonedDateTime;
 
 /**
- * Event object that flows through the Active In-Memory Queue
- * Represents a measurement reading from a scale device
+ * Event chứa dữ liệu đo từ cân - "Bao thư" chạy xuyên suốt từ Engine -> Queue -> Core
+ * Theo thiết kế Module 3, tất cả dữ liệu thô được giữ dạng String để giữ nguyên những gì Engine "thấy"
  */
 @Data
 @Builder
@@ -19,47 +18,28 @@ import java.util.Map;
 public class MeasurementEvent {
 
     /**
-     * Scale ID that produced this measurement
+     * ID của cân (scale_id)
      */
     private Long scaleId;
 
     /**
-     * Time when device returned the data (not when event was created)
+     * Thời điểm đọc được từ thiết bị (không phải thời điểm insert DB)
      */
-    private OffsetDateTime lastTime;
+    private ZonedDateTime lastTime;
 
     /**
-     * Data slot 1 (JSONB format)
+     * 5 trường dữ liệu thô đọc được từ thiết bị
+     * Luôn để String để giữ nguyên format gốc từ Engine (có thể là "0001", "1.0", v.v.)
+     * Việc convert sang Double/Integer sẽ làm ở Core Processing
      */
-    private Map<String, Object> data1;
+    private String data1;
+    private String data2;
+    private String data3;
+    private String data4;
+    private String data5;
 
     /**
-     * Data slot 2 (JSONB format)
-     */
-    private Map<String, Object> data2;
-
-    /**
-     * Data slot 3 (JSONB format)
-     */
-    private Map<String, Object> data3;
-
-    /**
-     * Data slot 4 (JSONB format)
-     */
-    private Map<String, Object> data4;
-
-    /**
-     * Data slot 5 (JSONB format)
-     */
-    private Map<String, Object> data5;
-
-    /**
-     * Device status (online, offline, error, etc.)
+     * Trạng thái thiết bị tại thời điểm đọc (online, offline, error, etc.)
      */
     private String status;
-
-    /**
-     * Event creation timestamp (for tracking latency)
-     */
-    private OffsetDateTime eventCreatedAt;
 }

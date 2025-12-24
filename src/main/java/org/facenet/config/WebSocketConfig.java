@@ -1,6 +1,5 @@
 package org.facenet.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -9,27 +8,36 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 /**
  * WebSocket configuration for real-time data streaming
+ * 
+ * Module 3.2: Real-time Broadcasting với WebSockets
+ * - Sử dụng STOMP protocol để broadcast dữ liệu cân
+ * - Client subscribe vào /topic/scales (toàn bộ) hoặc /topic/scale/{scaleId} (riêng lẻ)
+ * - Endpoint: /ws-scalehub với SockJS fallback
  */
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    @Value("${websocket.endpoint:/ws}")
-    private String endpoint;
-
-    @Value("${websocket.allowed-origins:*}")
-    private String allowedOrigins;
-
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic", "/queue");
+        // Client sẽ subscribe vào các topic bắt đầu bằng /topic
+        config.enableSimpleBroker("/topic");
+        // Prefix cho các tin nhắn từ client gửi lên server (nếu có)
         config.setApplicationDestinationPrefixes("/app");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint(endpoint)
-                .setAllowedOrigins(allowedOrigins)
+        // Endpoint tại root (backward compatible)
+        registry.addEndpoint("/ws-scalehub")
+                .setAllowedOriginPatterns(
+                        "http://localhost:*",
+                        "http://127.0.0.1:*",
+                        "file://*"
+                )
                 .withSockJS();
+        
+        // Endpoint với context-path /api/v1 (primary)
+        // Note: Spring Boot sẽ tự động thêm context-path, không cần thêm /api/v1 vào endpoint
     }
 }

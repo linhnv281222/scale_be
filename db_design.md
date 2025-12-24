@@ -223,11 +223,11 @@ CREATE TABLE scale_current_states (
     created_by varchar(256),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_by varchar(256),
-    data_1 JSONB,
-    data_2 JSONB,
-    data_3 JSONB,
-    data_4 JSONB,
-    data_5 JSONB,
+    data_1 varchar(256),
+    data_2 varchar(256),
+    data_3 varchar(256),
+    data_4 varchar(256),
+    data_5 varchar(256),
     status VARCHAR(20),
     last_time TIMESTAMPTZ NOT NULL,
 );
@@ -248,11 +248,11 @@ CREATE TABLE weighing_logs (
     updated_by varchar(256),
     last_time TIMESTAMPTZ NOT NULL,
 
-    data_1 JSONB,
-    data_2 JSONB,
-    data_3 JSONB,
-    data_4 JSONB,
-    data_5 JSONB,
+    data_1 varchar(256),
+    data_2 varchar(256),
+    data_3 varchar(256),
+    data_4 varchar(256),
+    data_5 varchar(256),
     PRIMARY KEY (scale_id, created_at)
 ) PARTITION BY RANGE (created_at);
 ```
@@ -279,11 +279,11 @@ CREATE TABLE scale_daily_reports (
     date DATE NOT NULL,
     scale_id BIGINT REFERENCES scales(id),
 
-    data_1 JSONB,
-    data_2 JSONB,
-    data_3 JSONB,
-    data_4 JSONB,
-    data_5 JSONB,
+    data_1 varchar(256),
+    data_2 varchar(256),
+    data_3 varchar(256),
+    data_4 varchar(256),
+    data_5 varchar(256),
     last_time TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (date, scale_id)
 );

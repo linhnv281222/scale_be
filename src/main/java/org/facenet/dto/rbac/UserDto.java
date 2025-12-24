@@ -90,7 +90,7 @@ public class UserDto {
         private Integer id;
         private String name;
         private String code;
-        private List<PermissionDto> permissions;
+        private List<PermissionDto.Response> permissions;
     }
 
     /**

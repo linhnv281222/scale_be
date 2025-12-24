@@ -79,9 +79,9 @@ public class PermissionServiceImpl implements PermissionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
 
         // Check if permission is being used by any roles
-        if (!permission.getRolePermissions().isEmpty()) {
-            throw new org.facenet.common.exception.ValidationException("Cannot delete permission that is assigned to roles");
-        }
+//        if (!permission.getRolePermissions().isEmpty()) {
+//            throw new org.facenet.common.exception.ValidationException("Cannot delete permission that is assigned to roles");
+//        }
 
         permissionRepository.delete(permission);
     }

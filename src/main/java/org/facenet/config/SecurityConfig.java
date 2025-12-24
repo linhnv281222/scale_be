@@ -57,10 +57,25 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of("*")); // DEV only
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        // Allow specific origins for development (including Live Server)
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+                "file://*"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(false);
+        config.setAllowCredentials(true); // Enable credentials for same-origin WebSocket
+        config.setMaxAge(3600L); // Cache preflight for 1 hour
+
+        // Allow WebSocket handshake headers
+        config.setExposedHeaders(List.of(
+                "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Credentials",
+                "Sec-WebSocket-Accept",
+                "Sec-WebSocket-Protocol",
+                "Sec-WebSocket-Version"
+        ));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
@@ -94,8 +109,11 @@ public class SecurityConfig {
                         // Auth endpoints (allow both with and without /api/v1 prefix)
                         .requestMatchers("/auth/**", "/api/v1/auth/**").permitAll()
 
-                        // WebSocket
-                        .requestMatchers("/ws/**").permitAll()
+                        // WebSocket (cho phép cả endpoint và SockJS paths)
+                        .requestMatchers("/ws/**", "/ws-scalehub/**", "/api/v1/ws-scalehub/**").permitAll()
+                        
+                        // Test endpoints (development only)
+                        .requestMatchers("/test/**", "/api/v1/test/**").permitAll()
 
                         // H2 Console
                         .requestMatchers("/h2-console/**").permitAll()
