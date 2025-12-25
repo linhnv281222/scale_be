@@ -49,6 +49,11 @@ public class LocationServiceImpl implements LocationService {
     @Override
     @Transactional
     public LocationDto.Response createLocation(LocationDto.Request request) {
+        // Validate code is provided for create
+        if (request.getCode() == null || request.getCode().isBlank()) {
+            throw new ValidationException("Location code is required");
+        }
+
         // Validate code uniqueness
         if (locationRepository.existsByCode(request.getCode())) {
             throw new AlreadyExistsException("Location", "code", request.getCode());
@@ -64,6 +69,7 @@ public class LocationServiceImpl implements LocationService {
         Location location = Location.builder()
                 .code(request.getCode())
                 .name(request.getName())
+                .description(request.getDescription())
                 .parent(parent)
                 .build();
 
@@ -77,14 +83,8 @@ public class LocationServiceImpl implements LocationService {
         Location location = locationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
 
-        // Check code uniqueness if changed
-        if (!location.getCode().equals(request.getCode()) &&
-            locationRepository.existsByCode(request.getCode())) {
-            throw new AlreadyExistsException("Location", "code", request.getCode());
-        }
-
         // Validate parent exists if provided and not self
-        Location parent = null;
+        Location parent = location.getParent(); // Keep existing parent by default
         if (request.getParentId() != null) {
             if (request.getParentId().equals(id)) {
                 throw new ValidationException("Location cannot be its own parent");
@@ -93,8 +93,13 @@ public class LocationServiceImpl implements LocationService {
                     .orElseThrow(() -> new ResourceNotFoundException("Parent location", "id", request.getParentId()));
         }
 
-        location.setCode(request.getCode());
-        location.setName(request.getName());
+        // Only update provided fields, never update code (it's immutable)
+        if (request.getName() != null) {
+            location.setName(request.getName());
+        }
+        if (request.getDescription() != null) {
+            location.setDescription(request.getDescription());
+        }
         location.setParent(parent);
 
         location = locationRepository.save(location);

@@ -32,10 +32,10 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    public List<UserDto.Simple> getAllUsers() {
-        return userRepository.findAll()
+    public List<UserDto.Response> getAllUsers() {
+        return userRepository.findAllWithRolesAndPermissions()
                 .stream()
-                .map(RbacMapper::toSimpleDto)
+                .map(RbacMapper::toResponseDto)
                 .collect(Collectors.toList());
     }
 

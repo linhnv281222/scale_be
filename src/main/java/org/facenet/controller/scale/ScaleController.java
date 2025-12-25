@@ -126,7 +126,7 @@ public class ScaleController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<ScaleConfigDto.Response>> getScaleConfig(
-            @Parameter(description = "ID của scale") @PathVariable Long id) {
+            @Parameter(description = "ID của scale") @PathVariable("id") Long id) {
         ScaleConfigDto.Response config = scaleService.getScaleConfig(id);
         return ResponseEntity.ok(ApiResponse.success(config));
     }
@@ -142,7 +142,7 @@ public class ScaleController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<ScaleConfigDto.Response>> updateScaleConfig(
-            @Parameter(description = "ID của scale") @PathVariable Long id,
+            @Parameter(description = "ID của scale") @PathVariable("id") Long id,
             @Valid @RequestBody ScaleConfigDto.Request request) {
         ScaleConfigDto.Response config = scaleService.updateScaleConfig(id, request);
         return ResponseEntity.ok(ApiResponse.success(config));

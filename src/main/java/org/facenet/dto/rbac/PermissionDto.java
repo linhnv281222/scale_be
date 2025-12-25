@@ -50,8 +50,14 @@ public class PermissionDto {
         @Schema(description = "ID quyền hạn", example = "1")
         private Integer id;
 
-        @Schema(description = "Mã quyền hạn", example = "READ_USER")
-        private String code;
+        @Schema(description = "Tên quyền hạn", example = "READ_USER")
+        private String name;
+
+        @Schema(description = "Resource", example = "USER")
+        private String resource;
+
+        @Schema(description = "Action", example = "READ")
+        private String action;
 
         @Schema(description = "Mô tả quyền hạn", example = "Quyền đọc thông tin người dùng")
         private String description;

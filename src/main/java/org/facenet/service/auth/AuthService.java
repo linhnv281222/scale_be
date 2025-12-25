@@ -1,9 +1,12 @@
 package org.facenet.service.auth;
 
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.ValidationException;
 import org.facenet.dto.auth.AuthDto;
+import org.facenet.dto.rbac.UserDto;
 import org.facenet.entity.rbac.User;
+import org.facenet.mapper.RbacMapper;
 import org.facenet.repository.rbac.UserRepository;
 import org.facenet.security.jwt.JwtTokenProvider;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -11,11 +14,9 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,41 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
+
+    /**
+     * Get current authenticated user details
+     */
+    public UserDto.Response getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new ValidationException("User not authenticated");
+        }
+
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ValidationException("User not found"));
+
+        return UserDto.Response.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .status(user.getStatus())
+                .roles(user.getRoles().stream()
+                        .map(role -> UserDto.RoleWithPermissions.builder()
+                                .id(role.getId())
+                                .name(role.getName())
+                                .code(role.getCode())
+                                .permissions(role.getPermissions().stream()
+                                        .map(RbacMapper::toResponseDto)
+                                        .collect(Collectors.toList()))
+                                .build())
+                        .collect(Collectors.toList()))
+                .createdAt(user.getCreatedAt())
+                .createdBy(user.getCreatedBy())
+                .updatedAt(user.getUpdatedAt())
+                .updatedBy(user.getUpdatedBy())
+                .build();
+    }
 
     /**
      * Authenticate user and generate tokens

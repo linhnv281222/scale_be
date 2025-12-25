@@ -10,9 +10,9 @@ import java.util.List;
 public interface UserService {
 
     /**
-     * Get all users
+     * Get all users with roles and permissions
      */
-    List<UserDto.Simple> getAllUsers();
+    List<UserDto.Response> getAllUsers();
 
     /**
      * Get user by ID with roles and permissions (3 levels deep)

@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #F1F5F9;
+    color: #1E293B;
+    font-family: Inter, system-ui, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    background-color: #1E40AF;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+  
+  .btn-primary:hover {
+    background-color: rgba(30, 64, 175, 0.9);
+  }
+
+  .btn-secondary {
+    background-color: #FFFFFF;
+    color: #1E293B;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+    border: 1px solid #D1D5DB;
+    transition: background-color 0.2s;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #F9FAFB;
+  }
+
+  .card {
+    background-color: #FFFFFF;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    padding: 1.5rem;
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+  }
+  
+  .input-field:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #1E40AF;
+    border-color: transparent;
+  }
+
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: rgba(255, 255, 255, 0.8);
+    transition: all 0.2s;
+    border-radius: 0.5rem;
+  }
+  
+  .sidebar-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+
+  .sidebar-link-active {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+}

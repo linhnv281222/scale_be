@@ -16,9 +16,25 @@ public class RbacMapper {
 
     public static PermissionDto.Response toDto(Permission permission) {
         if (permission == null) return null;
+        
+        // Parse code to extract action and resource
+        String code = permission.getCode();
+        String action = "";
+        String resource = "";
+        
+        if (code != null && code.contains("_")) {
+            String[] parts = code.split("_", 2);
+            if (parts.length == 2) {
+                action = parts[0];
+                resource = parts[1];
+            }
+        }
+        
         return PermissionDto.Response.builder()
                 .id(permission.getId())
-                .code(permission.getCode())
+                .name(code)
+                .resource(resource)
+                .action(action)
                 .description(permission.getDescription())
                 .createdAt(permission.getCreatedAt())
                 .createdBy(permission.getCreatedBy())
@@ -27,9 +43,25 @@ public class RbacMapper {
 
     public static PermissionDto.Response toResponseDto(Permission permission) {
         if (permission == null) return null;
+        
+        // Parse code to extract action and resource
+        String code = permission.getCode();
+        String action = "";
+        String resource = "";
+        
+        if (code != null && code.contains("_")) {
+            String[] parts = code.split("_", 2);
+            if (parts.length == 2) {
+                action = parts[0];
+                resource = parts[1];
+            }
+        }
+        
         return PermissionDto.Response.builder()
                 .id(permission.getId())
-                .code(permission.getCode())
+                .name(code)
+                .resource(resource)
+                .action(action)
                 .description(permission.getDescription())
                 .createdAt(permission.getCreatedAt())
                 .createdBy(permission.getCreatedBy())

@@ -29,7 +29,6 @@ public class ReportController {
      * Generate report based on request parameters
      */
     @PostMapping("/generate")
-    @PreAuthorize("hasAnyAuthority('REPORT_VIEW', 'ADMIN')")
     @Operation(summary = "Generate report", description = "Generate report with specified parameters")
     public ResponseEntity<ApiResponse<ReportResponseDto>> generateReport(
             @Valid @RequestBody ReportRequestDto request) {

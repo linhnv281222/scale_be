@@ -32,6 +32,9 @@ public class Location extends Auditable {
     @Column(name = "name", length = 100)
     private String name;
 
+    @Column(name = "description", length = 255)
+    private String description;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Location parent;

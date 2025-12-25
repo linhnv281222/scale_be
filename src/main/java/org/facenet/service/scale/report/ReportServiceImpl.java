@@ -83,6 +83,7 @@ public class ReportServiceImpl implements ReportService {
 
     /**
      * Build SQL query for ad-hoc reports
+     * Query weighing_logs directly and cast string data to numeric
      */
     private String buildAdHocQuery(ReportRequestDto request) {
         String scaleIdsStr = request.getScaleIds().toString().replaceAll("[\\[\\]]", "");
@@ -109,7 +110,8 @@ public class ReportServiceImpl implements ReportService {
     }
 
     /**
-     * Build SQL query for pre-aggregated reports
+     * Build pre-aggregated report query
+     * Query scale_daily_reports which has already aggregated data
      */
     private String buildPreAggregatedQuery(ReportRequestDto request) {
         String scaleIdsStr = request.getScaleIds().toString().replaceAll("[\\[\\]]", "");
@@ -136,17 +138,14 @@ public class ReportServiceImpl implements ReportService {
     }
 
     /**
-     * Build aggregation expression with JSONB casting
-     * Handles conversion from JSONB string to numeric
+     * Build aggregation expression - cast string to numeric
+     * Data in weighing_logs is stored as string, need to cast to NUMERIC for aggregation
      */
     private String buildAggregationExpression(ReportRequestDto.AggregationMethod method, String dataField) {
-        // Extract value from JSONB and cast to numeric
-        // Use regex to validate numeric format, default to 0 if invalid
+        // Cast string data to NUMERIC, handle invalid values as 0
         String castExpression = String.format(
-                "CASE WHEN %s::text ~ '^\"[0-9.]+\"$' THEN " +
-                        "SUBSTRING(%s::text FROM 2 FOR LENGTH(%s::text) - 2)::NUMERIC " +
-                        "ELSE 0 END",
-                dataField, dataField, dataField
+                "COALESCE(NULLIF(%s, '')::NUMERIC, 0)",
+                dataField
         );
 
         return switch (method) {

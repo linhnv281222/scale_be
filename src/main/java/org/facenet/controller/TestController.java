@@ -18,7 +18,7 @@ public class TestController {
     private final SimpMessagingTemplate messagingTemplate;
 
     @PostMapping("/broadcast/{scaleId}")
-    public String broadcastTestMessage(@PathVariable Long scaleId,
+    public String broadcastTestMessage(@PathVariable("scaleId") Long scaleId,
                                      @RequestParam(defaultValue = "150.50") String weight) {
 
         // Tạo test measurement event

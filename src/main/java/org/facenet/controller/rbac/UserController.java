@@ -31,15 +31,15 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    @Operation(summary = "Lấy danh sách tất cả users")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGE')")
+    @Operation(summary = "Lấy danh sách tất cả users với roles và permissions")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Lấy danh sách thành công"),
         @ApiResponse(responseCode = "403", description = "Không có quyền truy cập",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<org.facenet.common.response.ApiResponse<List<UserDto.Simple>>> getAllUsers() {
-        List<UserDto.Simple> users = userService.getAllUsers();
+    public ResponseEntity<org.facenet.common.response.ApiResponse<List<UserDto.Response>>> getAllUsers() {
+        List<UserDto.Response> users = userService.getAllUsers();
         return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(users));
     }
 
@@ -52,7 +52,7 @@ public class UserController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<org.facenet.common.response.ApiResponse<UserDto.Response>> getUserById(
-            @Parameter(description = "ID của user", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID của user", example = "1") @PathVariable("id") Long id) {
         UserDto.Response user = userService.getUserById(id);
         return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(user));
     }
@@ -83,7 +83,7 @@ public class UserController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<org.facenet.common.response.ApiResponse<UserDto.Response>> updateUser(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody UserDto.UpdateRequest request) {
         UserDto.Response user = userService.updateUser(id, request);
         return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(user, "User updated successfully"));
@@ -98,7 +98,7 @@ public class UserController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<org.facenet.common.response.ApiResponse<UserDto.Response>> updateUserRoles(
-            @Parameter(description = "ID của user", example = "1") @PathVariable Long id,
+            @Parameter(description = "ID của user", example = "1") @PathVariable("id") Long id,
             @RequestBody Map<String, List<Integer>> request) {
         List<Integer> roleIds = request.get("role_ids");
         UserDto.Response user = userService.updateUserRoles(id, roleIds);
@@ -113,7 +113,7 @@ public class UserController {
         @ApiResponse(responseCode = "404", description = "Không tìm thấy user",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<org.facenet.common.response.ApiResponse<Void>> deleteUser(@PathVariable Long id) {
+    public ResponseEntity<org.facenet.common.response.ApiResponse<Void>> deleteUser(@PathVariable("id") Long id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(null, "User deleted successfully"));
     }

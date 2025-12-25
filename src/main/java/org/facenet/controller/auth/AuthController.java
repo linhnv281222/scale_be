@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.response.ErrorResponse;
 import org.facenet.dto.auth.AuthDto;
+import org.facenet.dto.rbac.UserDto;
 import org.facenet.service.auth.AuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -61,5 +62,20 @@ public class AuthController {
     )
     public ResponseEntity<org.facenet.common.response.ApiResponse<Void>> logout() {
         return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(null, "Logout successful"));
+    }
+
+    @GetMapping("/me")
+    @Operation(
+        summary = "Lấy thông tin người dùng hiện tại",
+        description = "Lấy thông tin chi tiết của người dùng đã xác thực"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lấy thông tin thành công"),
+        @ApiResponse(responseCode = "401", description = "Người dùng chưa xác thực",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<org.facenet.common.response.ApiResponse<UserDto.Response>> getCurrentUser() {
+        UserDto.Response user = authService.getCurrentUser();
+        return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(user, "User information retrieved successfully"));
     }
 }

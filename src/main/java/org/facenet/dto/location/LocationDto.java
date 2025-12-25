@@ -27,8 +27,7 @@ public class LocationDto {
     @AllArgsConstructor
     @Schema(name = "LocationCreateUpdateRequest", description = "Request payload để tạo hoặc cập nhật vị trí")
     public static class Request {
-        @Schema(description = "Mã vị trí (unique)", example = "WS_01", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank(message = "Location code is required")
+        @Schema(description = "Mã vị trí (unique, required for create, ignored for update)", example = "WS_01")
         @Size(max = 20, message = "Code must not exceed 20 characters")
         private String code;
 
@@ -36,8 +35,11 @@ public class LocationDto {
         @Size(max = 100, message = "Name must not exceed 100 characters")
         private String name;
 
+        @Schema(description = "Mô tả vị trí", example = "Xưởng sản xuất A")
+        @Size(max = 255, message = "Description must not exceed 255 characters")
+        private String description;
+
         @Schema(description = "ID của vị trí cha (null nếu là level 0)", example = "null")
-        @JsonProperty("parent_id")
         private Long parentId;
     }
 
@@ -59,6 +61,9 @@ public class LocationDto {
 
         @Schema(description = "Tên vị trí", example = "Xưởng A")
         private String name;
+
+        @Schema(description = "Mô tả vị trí", example = "Xưởng sản xuất A")
+        private String description;
 
         @Schema(description = "ID của vị trí cha", example = "null")
         @JsonProperty("parent_id")
