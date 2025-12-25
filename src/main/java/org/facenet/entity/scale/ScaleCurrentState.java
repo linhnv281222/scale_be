@@ -30,19 +30,19 @@ public class ScaleCurrentState extends Auditable {
     @JoinColumn(name = "scale_id")
     private Scale scale;
 
-    @Column(name = "data_1")
+    @Column(name = "data_1", columnDefinition = "jsonb")
     private String data1;
 
-    @Column(name = "data_2")
+    @Column(name = "data_2", columnDefinition = "jsonb")
     private String data2;
 
-    @Column(name = "data_3")
+    @Column(name = "data_3", columnDefinition = "jsonb")
     private String data3;
 
-    @Column(name = "data_4")
+    @Column(name = "data_4", columnDefinition = "jsonb")
     private String data4;
 
-    @Column(name = "data_5")
+    @Column(name = "data_5", columnDefinition = "jsonb")
     private String data5;
 
     @Column(name = "status", length = 20)

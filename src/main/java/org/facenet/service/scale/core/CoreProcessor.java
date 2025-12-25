@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.event.MeasurementEvent;
+import org.facenet.service.scale.persistence.BatchPersistenceService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ import java.util.concurrent.TimeUnit;
  * 
  * Version 1 (V1): Chỉ ghi LOG để kiểm tra luồng dữ liệu
  * Version 2 (V2): Xử lý nghiệp vụ + Push WebSocket realtime
+ * Version 3 (V3): Persistence - Lưu dữ liệu vào DB
  */
 @Slf4j
 @Component
@@ -30,15 +32,18 @@ public class CoreProcessor {
     private final BlockingQueue<MeasurementEvent> activeQueue;
     private final ExecutorService coreProcessingExecutor;
     private final SimpMessagingTemplate messagingTemplate;
+    private final BatchPersistenceService batchPersistenceService;
     private volatile boolean running = false;
     
     public CoreProcessor(
             @Qualifier("measurementEventQueue") BlockingQueue<MeasurementEvent> activeQueue,
             @Qualifier("coreProcessingExecutor") ExecutorService coreProcessingExecutor,
-            SimpMessagingTemplate messagingTemplate) {
+            SimpMessagingTemplate messagingTemplate,
+            BatchPersistenceService batchPersistenceService) {
         this.activeQueue = activeQueue;
         this.coreProcessingExecutor = coreProcessingExecutor;
         this.messagingTemplate = messagingTemplate;
+        this.batchPersistenceService = batchPersistenceService;
     }
     
     /**
@@ -48,6 +53,9 @@ public class CoreProcessor {
     public void startProcessing() {
         running = true;
         log.info("[CORE] Starting Core Processor...");
+        
+        // Start batch persistence processing
+        batchPersistenceService.startBatchProcessing();
         
         // Lấy số worker threads từ executor
         // Default: 4-8 workers theo design spec
@@ -78,11 +86,8 @@ public class CoreProcessor {
                 // V2: BROADCAST qua WebSocket
                 broadcastMeasurement(event);
                 
-                // TODO V3: Xử lý nghiệp vụ đầy đủ
-                // - Chuẩn hóa dữ liệu
-                // - Áp dụng mapping register → metric
-                // - Xử lý trạng thái thiết bị
-                // - Lưu vào DB (measurements, device_events)
+                // V3: PERSISTENCE - Lưu vào DB
+                batchPersistenceService.addToBatch(event);
                 
             } catch (InterruptedException e) {
                 log.warn("[CORE-Worker-{}] Interrupted, stopping...", workerId);
@@ -143,6 +148,9 @@ public class CoreProcessor {
     public void stopProcessing() {
         log.info("[CORE] Stopping Core Processor...");
         running = false;
+        
+        // Stop batch persistence
+        batchPersistenceService.stopBatchProcessing();
         
         try {
             coreProcessingExecutor.shutdown();

@@ -1,0 +1,12 @@
+{
+  "scaleId": 1,
+  "lastTime": "2025-12-25T10:27:21.361715600+07:00[Asia/Bangkok]",
+  "data1": "131075",
+  "data2": "4",
+  "data3": "null",
+  "data4": "null",
+  "data5": "null",
+  "status": "ONLINE",
+  "error": "null identifier (org.facenet.entity.scale.ScaleCurrentState)",
+  "timestamp": "2025-12-25T10:27:22.702210100"
+}

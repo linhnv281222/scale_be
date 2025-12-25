@@ -44,19 +44,19 @@ public class WeighingLog {
     @Column(name = "last_time", nullable = false)
     private OffsetDateTime lastTime;
 
-    @Column(name = "data_1")
+    @Column(name = "data_1", columnDefinition = "jsonb")
     private String data1;
 
-    @Column(name = "data_2")
+    @Column(name = "data_2", columnDefinition = "jsonb")
     private String data2;
 
-    @Column(name = "data_3")
+    @Column(name = "data_3", columnDefinition = "jsonb")
     private String data3;
 
-    @Column(name = "data_4")
+    @Column(name = "data_4", columnDefinition = "jsonb")
     private String data4;
 
-    @Column(name = "data_5")
+    @Column(name = "data_5", columnDefinition = "jsonb")
     private String data5;
 
     // Audit fields (manually managed since this entity doesn't extend Auditable)

@@ -50,4 +50,17 @@ public class ActiveQueueConfig {
     public ExecutorService deviceEngineExecutor() {
         return Executors.newCachedThreadPool();
     }
+
+    /**
+     * Thread pool cho Batch Persistence
+     * Single thread for batch processing to maintain order
+     */
+    @Bean(name = "batchPersistenceExecutor")
+    public ExecutorService batchPersistenceExecutor() {
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "batch-persistence");
+            t.setDaemon(true);
+            return t;
+        });
+    }
 }

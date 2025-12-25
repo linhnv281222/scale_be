@@ -57,15 +57,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Allow specific origins for development (including Live Server)
-        config.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "file://*"
-        ));
+        // Allow all origins for development and production
+        config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true); // Enable credentials for same-origin WebSocket
+        config.setAllowCredentials(false); // Disable for wildcard origins
         config.setMaxAge(3600L); // Cache preflight for 1 hour
 
         // Allow WebSocket handshake headers
