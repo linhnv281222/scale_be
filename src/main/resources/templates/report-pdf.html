@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${report.reportTitle}">Báo cáo</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 15mm;
+            @bottom-right {
+                content: "Trang " counter(page) " / " counter(pages);
+            }
+        }
+
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            color: #000;
+            margin: 0;
+            padding: 0;
+        }
+
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 72pt;
+            color: rgba(200, 200, 200, 0.3);
+            z-index: -1;
+            font-weight: bold;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 18pt;
+            font-weight: bold;
+            margin: 10px 0;
+            text-transform: uppercase;
+        }
+
+        .header .info {
+            font-size: 11pt;
+            margin: 5px 0;
+        }
+
+        .metadata {
+            margin: 15px 0;
+            font-size: 11pt;
+        }
+
+        .metadata table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .metadata td {
+            padding: 4px 8px;
+        }
+
+        .metadata td:first-child {
+            font-weight: bold;
+            width: 150px;
+        }
+
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 10pt;
+        }
+
+        table.data-table th {
+            background-color: #2c3e50;
+            color: white;
+            font-weight: bold;
+            padding: 8px 5px;
+            text-align: center;
+            border: 1px solid #000;
+        }
+
+        table.data-table td {
+            padding: 6px 5px;
+            border: 1px solid #000;
+            text-align: center;
+        }
+
+        table.data-table td.text-left {
+            text-align: left;
+        }
+
+        table.data-table td.number {
+            text-align: right;
+        }
+
+        table.data-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .summary {
+            margin-top: 20px;
+            background-color: #ecf0f1;
+            padding: 15px;
+            border: 2px solid #2c3e50;
+        }
+
+        .summary h3 {
+            margin: 0 0 10px 0;
+            font-size: 13pt;
+            color: #2c3e50;
+        }
+
+        .summary table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11pt;
+        }
+
+        .summary td {
+            padding: 5px 10px;
+            border-bottom: 1px solid #bdc3c7;
+        }
+
+        .summary td:first-child {
+            font-weight: bold;
+            width: 200px;
+        }
+
+        .summary td.number {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        .signatures {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            font-size: 11pt;
+        }
+
+        .signature-box {
+            width: 30%;
+        }
+
+        .signature-box .title {
+            font-weight: bold;
+            margin-bottom: 50px;
+        }
+
+        .signature-box .name {
+            font-style: italic;
+            margin-top: 10px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 9pt;
+            color: #7f8c8d;
+            border-top: 1px solid #bdc3c7;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Watermark -->
+    <div class="watermark">HỆ THỐNG SCALEHUB</div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1 th:text="${report.reportTitle}">BÁO CÁO SẢN LƯỢNG TRẠM CÂN</h1>
+        <div class="info">
+            <strong>Mã báo cáo:</strong> <span th:text="${report.reportCode}">BCSL-001</span>
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="metadata">
+        <table>
+            <tr>
+                <td><strong>Thời gian:</strong></td>
+                <td th:text="${report.metadata.get('dateRange')}">01/12/2025 - 26/12/2025</td>
+            </tr>
+            <tr>
+                <td><strong>Thời gian xuất:</strong></td>
+                <td th:text="${dataFormatter.formatDateTime(report.exportTime)}">26/12/2025 10:30:00</td>
+            </tr>
+            <tr>
+                <td><strong>Người thực hiện:</strong></td>
+                <td th:text="${report.preparedBy}">System</td>
+            </tr>
+            <tr>
+                <td><strong>Tổng số bản ghi:</strong></td>
+                <td th:text="${report.metadata.get('totalLogs')}">1250</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Data Table -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 5%;">STT</th>
+                <th style="width: 10%;">Mã trạm</th>
+                <th style="width: 15%;">Tên trạm</th>
+                <th style="width: 12%;">Vị trí</th>
+                <th style="width: 10%;">Data 1 (kg)</th>
+                <th style="width: 10%;">Data 2 (kg)</th>
+                <th style="width: 10%;">Data 3 (kg)</th>
+                <th style="width: 10%;">Data 4 (kg)</th>
+                <th style="width: 10%;">Data 5 (kg)</th>
+                <th style="width: 8%;">Số lần cân</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="row : ${report.rows}">
+                <td th:text="${row.rowNumber}">1</td>
+                <td th:text="${row.scaleCode != null ? row.scaleCode : ''}">SCALE-1</td>
+                <td class="text-left" th:text="${row.scaleName != null ? row.scaleName : ''}">Trạm cân 1</td>
+                <td class="text-left" th:text="${row.location != null ? row.location : 'N/A'}">Xưởng A</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(row.data1Total)}">1,250.50</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(row.data2Total)}">980.00</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(row.data3Total)}">750.25</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(row.data4Total)}">620.75</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(row.data5Total)}">450.00</td>
+                <td th:text="${row.recordCount}">125</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Summary Section -->
+    <div class="summary">
+        <h3>TỔNG HỢP</h3>
+        <table>
+            <tr>
+                <td>Tổng số trạm cân:</td>
+                <td class="number" th:text="${report.summary.totalScales}">10</td>
+                <td>Tổng số bản ghi:</td>
+                <td class="number" th:text="${report.summary.totalRecords}">1,250</td>
+            </tr>
+            <tr>
+                <td>Tổng Data 1:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1GrandTotal)} + ' kg'">12,505.00 kg</td>
+                <td>Trung bình Data 1:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Average)} + ' kg'">1,250.50 kg</td>
+            </tr>
+            <tr>
+                <td>Tổng Data 2:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2GrandTotal)} + ' kg'">9,800.00 kg</td>
+                <td>Trung bình Data 2:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Average)} + ' kg'">980.00 kg</td>
+            </tr>
+            <tr>
+                <td>Tổng Data 3:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3GrandTotal)} + ' kg'">7,502.50 kg</td>
+                <td>Trung bình Data 3:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3Average)} + ' kg'">750.25 kg</td>
+            </tr>
+            <tr>
+                <td>Giá trị lớn nhất Data 1:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Max)} + ' kg'">2,500.00 kg</td>
+                <td>Giá trị lớn nhất Data 2:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Max)} + ' kg'">1,800.00 kg</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+        <div class="signature-box">
+            <div class="title">Người lập biểu</div>
+            <div class="name">(Ký, ghi rõ họ tên)</div>
+        </div>
+        <div class="signature-box">
+            <div class="title">Trưởng bộ phận</div>
+            <div class="name">(Ký, ghi rõ họ tên)</div>
+        </div>
+        <div class="signature-box">
+            <div class="title">Giám đốc</div>
+            <div class="name">(Ký, đóng dấu)</div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Báo cáo được tạo tự động bởi Hệ thống ScaleHub IoT | INTERNAL ONLY - BẢO MẬT</p>
+    </div>
+</body>
+</html>

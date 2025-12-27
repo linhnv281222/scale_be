@@ -36,3 +36,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+HOT_RELOAD_ENGINE.md
+CACHE_OPTIMIZATION.md

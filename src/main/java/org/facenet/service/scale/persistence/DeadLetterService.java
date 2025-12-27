@@ -47,11 +47,11 @@ public class DeadLetterService {
                 writer.write("{\n");
                 writer.write("  \"scaleId\": " + event.getScaleId() + ",\n");
                 writer.write("  \"lastTime\": \"" + event.getLastTime() + "\",\n");
-                writer.write("  \"data1\": \"" + escapeJson(event.getData1()) + "\",\n");
-                writer.write("  \"data2\": \"" + escapeJson(event.getData2()) + "\",\n");
-                writer.write("  \"data3\": \"" + escapeJson(event.getData3()) + "\",\n");
-                writer.write("  \"data4\": \"" + escapeJson(event.getData4()) + "\",\n");
-                writer.write("  \"data5\": \"" + escapeJson(event.getData5()) + "\",\n");
+                writer.write("  \"data1\": " + dataFieldToJson(event.getData1()) + ",\n");
+                writer.write("  \"data2\": " + dataFieldToJson(event.getData2()) + ",\n");
+                writer.write("  \"data3\": " + dataFieldToJson(event.getData3()) + ",\n");
+                writer.write("  \"data4\": " + dataFieldToJson(event.getData4()) + ",\n");
+                writer.write("  \"data5\": " + dataFieldToJson(event.getData5()) + ",\n");
                 writer.write("  \"status\": \"" + escapeJson(event.getStatus()) + "\",\n");
                 writer.write("  \"error\": \"" + escapeJson(exception.getMessage()) + "\",\n");
                 writer.write("  \"timestamp\": \"" + LocalDateTime.now() + "\"\n");
@@ -63,6 +63,16 @@ public class DeadLetterService {
         } catch (IOException e) {
             log.error("[DEAD-LETTER] Failed to write dead letter for scale {}: {}", event.getScaleId(), e.getMessage());
         }
+    }
+
+    /**
+     * Convert DataField to JSON string
+     */
+    private String dataFieldToJson(org.facenet.event.DataField dataField) {
+        if (dataField == null) return "null";
+        return String.format("{\"name\": \"%s\", \"value\": \"%s\"}", 
+            escapeJson(dataField.getName()), 
+            escapeJson(dataField.getValue()));
     }
 
     /**

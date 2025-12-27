@@ -1,6 +1,7 @@
 package org.facenet.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.facenet.event.DataField;
 import org.facenet.event.MeasurementEvent;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -26,11 +27,18 @@ public class TestController {
                 .scaleId(scaleId)
                 .lastTime(ZonedDateTime.now())
                 .status("TEST")
-                .data1(weight)
-                .data2("1")
-                .data3("2")
-                .data4("3")
-                .data5("4")
+                .data1(DataField.builder()
+                        .name("Weight")
+                        .value(weight)
+                        .build())
+                .data2(DataField.builder()
+                        .name("Temperature")
+                        .value("25")
+                        .build())
+                .data3(DataField.builder()
+                        .name("Humidity")
+                        .value("60")
+                        .build())
                 .build();
 
         // Broadcast qua WebSocket

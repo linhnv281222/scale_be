@@ -64,12 +64,12 @@ public class PersistenceServiceImpl implements PersistenceService {
                     return newState;
                 });
 
-        // Map data fields as plain strings (JSONB scalar)
-        currentState.setData1(event.getData1());
-        currentState.setData2(event.getData2());
-        currentState.setData3(event.getData3());
-        currentState.setData4(event.getData4());
-        currentState.setData5(event.getData5());
+        // Map data fields - lấy value từ DataField object
+        currentState.setData1(event.getData1() != null ? event.getData1().getValue() : null);
+        currentState.setData2(event.getData2() != null ? event.getData2().getValue() : null);
+        currentState.setData3(event.getData3() != null ? event.getData3().getValue() : null);
+        currentState.setData4(event.getData4() != null ? event.getData4().getValue() : null);
+        currentState.setData5(event.getData5() != null ? event.getData5().getValue() : null);
         currentState.setStatus(event.getStatus());
         currentState.setLastTime(event.getLastTime().toOffsetDateTime());
 
@@ -88,11 +88,11 @@ public class PersistenceServiceImpl implements PersistenceService {
                 .scaleId(event.getScaleId())
                 .createdAt(OffsetDateTime.now()) // Set createdAt explicitly for composite key
                 .lastTime(event.getLastTime().toOffsetDateTime())
-                .data1(event.getData1())
-                .data2(event.getData2())
-                .data3(event.getData3())
-                .data4(event.getData4())
-                .data5(event.getData5())
+                .data1(event.getData1() != null ? event.getData1().getValue() : null)
+                .data2(event.getData2() != null ? event.getData2().getValue() : null)
+                .data3(event.getData3() != null ? event.getData3().getValue() : null)
+                .data4(event.getData4() != null ? event.getData4().getValue() : null)
+                .data5(event.getData5() != null ? event.getData5().getValue() : null)
                 .createdBy("engine_modbus")
                 .updatedBy("engine_modbus")
                 .build();

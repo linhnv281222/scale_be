@@ -6,9 +6,14 @@ import org.facenet.common.exception.ResourceNotFoundException;
 import org.facenet.common.exception.ValidationException;
 import org.facenet.dto.location.LocationDto;
 import org.facenet.entity.location.Location;
+import org.facenet.event.LocationChangedEvent;
 import org.facenet.mapper.LocationMapper;
 import org.facenet.repository.location.LocationRepository;
 import org.facenet.repository.scale.ScaleRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,20 +31,24 @@ public class LocationServiceImpl implements LocationService {
 
     private final LocationRepository locationRepository;
     private final ScaleRepository scaleRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
+    @Cacheable(value = "locations")
     public List<LocationDto.Response> getAllLocations() {
         List<Location> locations = locationRepository.findAll();
         return LocationMapper.toResponseDtoList(locations);
     }
 
     @Override
+    @Cacheable(value = "locationsTree")
     public List<LocationDto.Response> getLocationsTree() {
         List<Location> allLocations = locationRepository.findAll();
         return buildTree(allLocations);
     }
 
     @Override
+    @Cacheable(value = "locations", key = "#id")
     public LocationDto.Response getLocationById(Long id) {
         Location location = locationRepository.findByIdWithChildren(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
@@ -74,11 +83,20 @@ public class LocationServiceImpl implements LocationService {
                 .build();
 
         location = locationRepository.save(location);
+        
+        // Invalidate cache and publish event
+        eventPublisher.publishEvent(new LocationChangedEvent(this, location.getId(), "CREATE"));
+        
         return LocationMapper.toResponseDto(location);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "locations", key = "#id"),
+        @CacheEvict(value = "locations", allEntries = true),
+        @CacheEvict(value = "locationsTree", allEntries = true)
+    })
     public LocationDto.Response updateLocation(Long id, LocationDto.Request request) {
         Location location = locationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
@@ -103,11 +121,20 @@ public class LocationServiceImpl implements LocationService {
         location.setParent(parent);
 
         location = locationRepository.save(location);
+        
+        // Publish event
+        eventPublisher.publishEvent(new LocationChangedEvent(this, location.getId(), "UPDATE"));
+        
         return LocationMapper.toResponseDto(location);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "locations", key = "#id"),
+        @CacheEvict(value = "locations", allEntries = true),
+        @CacheEvict(value = "locationsTree", allEntries = true)
+    })
     public void deleteLocation(Long id) {
         Location location = locationRepository.findByIdWithChildren(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
@@ -125,6 +152,9 @@ public class LocationServiceImpl implements LocationService {
         }
 
         locationRepository.delete(location);
+        
+        // Publish event
+        eventPublisher.publishEvent(new LocationChangedEvent(this, id, "DELETE"));
     }
 
     private List<LocationDto.Response> buildTree(List<Location> locations) {

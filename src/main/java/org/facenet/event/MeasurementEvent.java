@@ -28,15 +28,14 @@ public class MeasurementEvent {
     private ZonedDateTime lastTime;
 
     /**
-     * 5 trường dữ liệu thô đọc được từ thiết bị
-     * Luôn để String để giữ nguyên format gốc từ Engine (có thể là "0001", "1.0", v.v.)
-     * Việc convert sang Double/Integer sẽ làm ở Core Processing
+     * 5 trường dữ liệu đọc được từ thiết bị
+     * Mỗi trường là object chứa name và value
      */
-    private String data1;
-    private String data2;
-    private String data3;
-    private String data4;
-    private String data5;
+    private DataField data1;
+    private DataField data2;
+    private DataField data3;
+    private DataField data4;
+    private DataField data5;
 
     /**
      * Trạng thái thiết bị tại thời điểm đọc (online, offline, error, etc.)

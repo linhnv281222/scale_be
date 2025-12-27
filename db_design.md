@@ -291,22 +291,153 @@ CREATE TABLE scale_daily_reports (
 
 ---
 
-## G. Form Templates
+## G. Report Configuration (Dynamic)
 
-### `form_templates`
+### `organization_settings`
+Cấu hình thông tin công ty và branding
 
 ```sql
-CREATE TABLE form_templates (
+CREATE TABLE organization_settings (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100),
-    content TEXT,
-    is_default BOOLEAN DEFAULT false,
-
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_by BIGINT REFERENCES users(id),
+    created_by varchar(256),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_by BIGINT REFERENCES users(id)
+    updated_by varchar(256),
+    
+    -- Company info
+    company_name VARCHAR(255) NOT NULL,
+    company_name_en VARCHAR(255),
+    address TEXT,
+    phone VARCHAR(50),
+    email VARCHAR(100),
+    website VARCHAR(255),
+    tax_code VARCHAR(50),
+    
+    -- Branding
+    logo_url TEXT,
+    logo_data BYTEA,  -- Binary data cho logo
+    watermark_text VARCHAR(100),
+    
+    -- Default settings
+    is_active BOOLEAN DEFAULT true,
+    is_default BOOLEAN DEFAULT false
 );
+```
+
+---
+
+### `report_templates`
+Template động cho các loại báo cáo
+
+```sql
+CREATE TABLE report_templates (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by varchar(256),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by varchar(256),
+    
+    -- Template info
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    report_type VARCHAR(20) NOT NULL,  -- EXCEL, WORD, PDF
+    
+    -- Configuration
+    title_template VARCHAR(500),  -- e.g. "BÁO CÁO SẢN LƯỢNG - {{dateRange}}"
+    
+    -- Styling (JSONB for flexibility)
+    header_config JSONB,  -- {showLogo, showCompanyInfo, headerColor, etc.}
+    footer_config JSONB,  -- {showPageNumber, footerText, signatureFields, etc.}
+    table_config JSONB,   -- {headerColor, borderStyle, fontSize, etc.}
+    
+    -- Status
+    is_active BOOLEAN DEFAULT true,
+    is_default BOOLEAN DEFAULT false,
+    
+    CONSTRAINT chk_report_type CHECK (report_type IN ('EXCEL', 'WORD', 'PDF'))
+);
+
+CREATE INDEX idx_report_templates_type ON report_templates(report_type, is_active);
+```
+
+---
+
+### `report_columns`
+Cấu hình động các cột trong báo cáo
+
+```sql
+CREATE TABLE report_columns (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by varchar(256),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by varchar(256),
+    
+    template_id INT REFERENCES report_templates(id) ON DELETE CASCADE,
+    
+    -- Column definition
+    column_key VARCHAR(50) NOT NULL,     -- e.g. "data_1", "scale_name"
+    column_label VARCHAR(200) NOT NULL,   -- e.g. "Khối lượng (kg)"
+    column_order INT NOT NULL,
+    
+    -- Data mapping
+    data_source VARCHAR(50) NOT NULL,     -- SCALE_INFO, WEIGHING_DATA, CALCULATED
+    data_field VARCHAR(50),               -- Field name in source
+    data_type VARCHAR(20),                -- STRING, NUMBER, DATE, BOOLEAN
+    
+    -- Formatting
+    format_pattern VARCHAR(100),          -- e.g. "#,##0.00" for numbers
+    aggregation_type VARCHAR(20),         -- SUM, AVG, MAX, MIN, COUNT, NONE
+    
+    -- Display
+    is_visible BOOLEAN DEFAULT true,
+    width INT,                            -- Column width (for Excel/Word)
+    alignment VARCHAR(10),                -- LEFT, CENTER, RIGHT
+    
+    CONSTRAINT chk_data_source CHECK (data_source IN ('SCALE_INFO', 'WEIGHING_DATA', 'CALCULATED')),
+    CONSTRAINT chk_aggregation CHECK (aggregation_type IN ('SUM', 'AVG', 'MAX', 'MIN', 'COUNT', 'NONE'))
+);
+
+CREATE INDEX idx_report_columns_template ON report_columns(template_id, column_order);
+```
+
+---
+
+### `report_export_logs`
+Audit trail cho việc xuất báo cáo
+
+```sql
+CREATE TABLE report_export_logs (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by varchar(256),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by varchar(256),
+    
+    template_id INT REFERENCES report_templates(id),
+    
+    -- Request info
+    export_type VARCHAR(20) NOT NULL,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
+    scale_ids JSONB,                      -- Array of scale IDs
+    
+    -- Result
+    file_name VARCHAR(500),
+    file_size BIGINT,
+    record_count INT,
+    status VARCHAR(20) NOT NULL,          -- SUCCESS, FAILED, TIMEOUT
+    error_message TEXT,
+    
+    -- Performance
+    execution_time_ms BIGINT,
+    
+    CONSTRAINT chk_export_status CHECK (status IN ('SUCCESS', 'FAILED', 'TIMEOUT'))
+);
+
+CREATE INDEX idx_export_logs_created ON report_export_logs(created_at DESC);
+CREATE INDEX idx_export_logs_user ON report_export_logs(created_by, created_at DESC);
 ```
 
 ---
@@ -314,3 +445,7 @@ CREATE TABLE form_templates (
 ## 3. Design Notes (Enterprise-grade)
 
 * `last_time` ≠ `created_at`
+* **Dynamic Configuration**: Report templates được cấu hình hoàn toàn động qua JSONB
+* **Multi-tenant Ready**: `organization_settings` cho phép multiple organizations
+* **Flexible Columns**: `report_columns` mapping động, không hardcode
+* **Audit Trail**: `report_export_logs` theo dõi toàn bộ lịch sử xuất báo cáo

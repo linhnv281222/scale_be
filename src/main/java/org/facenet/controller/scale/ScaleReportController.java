@@ -14,14 +14,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * REST Controller for report and statistics endpoints
+ * REST Controller for scale report and statistics endpoints
  */
 @Slf4j
 @RestController
 @RequestMapping("/reports")
 @RequiredArgsConstructor
-@Tag(name = "Reports", description = "Report and statistics APIs")
-public class ReportController {
+@Tag(name = "Scale Reports", description = "Scale report and statistics APIs")
+public class ScaleReportController {
 
     private final ReportService reportService;
 

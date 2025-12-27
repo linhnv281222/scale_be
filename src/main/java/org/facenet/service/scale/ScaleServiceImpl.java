@@ -7,10 +7,15 @@ import org.facenet.dto.scale.ScaleDto;
 import org.facenet.entity.location.Location;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
+import org.facenet.event.ConfigChangedEvent;
 import org.facenet.mapper.ScaleMapper;
 import org.facenet.repository.location.LocationRepository;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,8 +35,10 @@ public class ScaleServiceImpl implements ScaleService {
     private final ScaleRepository scaleRepository;
     private final ScaleConfigRepository scaleConfigRepository;
     private final LocationRepository locationRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
+    @Cacheable(value = "scales")
     public List<ScaleDto.Response> getAllScales() {
         List<Scale> scales = scaleRepository.findAll();
         return scales.stream()
@@ -40,6 +47,7 @@ public class ScaleServiceImpl implements ScaleService {
     }
 
     @Override
+    @Cacheable(value = "scalesByLocation", key = "#locationId")
     public List<ScaleDto.Response> getScalesByLocation(Long locationId) {
         List<Scale> scales = scaleRepository.findByLocationId(locationId);
         return scales.stream()
@@ -56,6 +64,7 @@ public class ScaleServiceImpl implements ScaleService {
     }
 
     @Override
+    @Cacheable(value = "scales", key = "#id")
     public ScaleDto.Response getScaleById(Long id) {
         Scale scale = scaleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", id));
@@ -81,11 +90,19 @@ public class ScaleServiceImpl implements ScaleService {
         // Create default config
         createDefaultConfig(scale);
 
+        // Publish event for cache invalidation
+        eventPublisher.publishEvent(new ConfigChangedEvent(this, scale.getId(), "SCALE_CREATE"));
+
         return ScaleMapper.toResponseDto(scale);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "scales", key = "#id"),
+        @CacheEvict(value = "scales", allEntries = true),
+        @CacheEvict(value = "scalesByLocation", allEntries = true)
+    })
     public ScaleDto.Response updateScale(Long id, ScaleDto.Request request) {
         Scale scale = scaleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", id));
@@ -100,20 +117,34 @@ public class ScaleServiceImpl implements ScaleService {
         scale.setIsActive(request.getIsActive());
 
         scale = scaleRepository.save(scale);
+        
+        // Publish event
+        eventPublisher.publishEvent(new ConfigChangedEvent(this, scale.getId(), "SCALE_UPDATE"));
+        
         return ScaleMapper.toResponseDto(scale);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "scales", key = "#id"),
+        @CacheEvict(value = "scales", allEntries = true),
+        @CacheEvict(value = "scalesByLocation", allEntries = true),
+        @CacheEvict(value = "scaleConfig", key = "#id")
+    })
     public void deleteScale(Long id) {
         Scale scale = scaleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", id));
 
         // Config and current state will be deleted via cascade
         scaleRepository.delete(scale);
+        
+        // Publish event
+        eventPublisher.publishEvent(new ConfigChangedEvent(this, id, "SCALE_DELETE"));
     }
 
     @Override
+    @Cacheable(value = "scaleConfig", key = "#scaleId")
     public ScaleConfigDto.Response getScaleConfig(Long scaleId) {
         ScaleConfig config = scaleConfigRepository.findById(scaleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale config", "scaleId", scaleId));
@@ -122,6 +153,7 @@ public class ScaleServiceImpl implements ScaleService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "scaleConfig", key = "#scaleId")
     public ScaleConfigDto.Response updateScaleConfig(Long scaleId, ScaleConfigDto.Request request) {
         ScaleConfig config = scaleConfigRepository.findById(scaleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale config", "scaleId", scaleId));
@@ -137,7 +169,8 @@ public class ScaleServiceImpl implements ScaleService {
 
         config = scaleConfigRepository.save(config);
 
-        // TODO: Send hot-reload signal to engine worker
+        // Publish event for hot-reload and cache invalidation
+        eventPublisher.publishEvent(new ConfigChangedEvent(this, scaleId, "CONFIG_UPDATE"));
 
         return ScaleMapper.toConfigDto(config);
     }

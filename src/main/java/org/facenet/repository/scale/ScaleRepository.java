@@ -21,6 +21,8 @@ public interface ScaleRepository extends JpaRepository<Scale, Long> {
 
     List<Scale> findByIsActive(Boolean isActive);
 
+    long countByIsActive(Boolean isActive);
+
     /**
      * Find scale with config and current state
      */

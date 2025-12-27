@@ -7,6 +7,7 @@ import com.intelligt.modbus.jlibmodbus.master.ModbusMasterFactory;
 import com.intelligt.modbus.jlibmodbus.tcp.TcpParameters;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.entity.scale.ScaleConfig;
+import org.facenet.event.DataField;
 import org.facenet.event.MeasurementEvent;
 import org.facenet.service.scale.engine.util.ModbusDataConverter;
 
@@ -95,12 +96,12 @@ public class ModbusTcpEngine implements ScaleEngine {
                         unitId = 1; // Default Unit ID
                     }
                     
-                    // Đọc data_1 -> data_5
-                    event.setData1(readRegister(master, unitId, config.getData1()));
-                    event.setData2(readRegister(master, unitId, config.getData2()));
-                    event.setData3(readRegister(master, unitId, config.getData3()));
-                    event.setData4(readRegister(master, unitId, config.getData4()));
-                    event.setData5(readRegister(master, unitId, config.getData5()));
+                    // Đọc data_1 -> data_5 và tạo DataField object
+                    event.setData1(createDataField(master, unitId, config.getData1()));
+                    event.setData2(createDataField(master, unitId, config.getData2()));
+                    event.setData3(createDataField(master, unitId, config.getData3()));
+                    event.setData4(createDataField(master, unitId, config.getData4()));
+                    event.setData5(createDataField(master, unitId, config.getData5()));
                     
                     // Đẩy vào Queue
                     queue.put(event);
@@ -186,6 +187,38 @@ public class ModbusTcpEngine implements ScaleEngine {
         }
     }
     
+    /**
+     * Tạo DataField object từ config và giá trị đọc được
+     */
+    private DataField createDataField(ModbusMaster master, int unitId, Map<String, Object> dataConfig) {
+        if (dataConfig == null || !isDataSlotUsed(dataConfig)) {
+            return null;
+        }
+        
+        String name = getDataName(dataConfig);
+        String value = readRegister(master, unitId, dataConfig);
+        
+        if (value == null) {
+            return null;
+        }
+        
+        return DataField.builder()
+                .name(name)
+                .value(value)
+                .build();
+    }
+
+    /**
+     * Lấy tên của data field từ config
+     */
+    private String getDataName(Map<String, Object> dataConfig) {
+        if (dataConfig == null) {
+            return null;
+        }
+        Object name = dataConfig.get("name");
+        return name != null ? name.toString() : null;
+    }
+
     /**
      * Kiểm tra data slot có được sử dụng không
      */

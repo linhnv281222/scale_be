@@ -133,11 +133,33 @@ public class CoreProcessor {
         log.info("[CORE-Worker-{}] Received measurement from Scale ID: {}", workerId, event.getScaleId());
         log.info("[CORE-Worker-{}] Last Time: {}", workerId, event.getLastTime());
         log.info("[CORE-Worker-{}] Status: {}", workerId, event.getStatus());
-        log.info("[CORE-Worker-{}] D1: {}", workerId, event.getData1() != null ? event.getData1() : "N/A");
-        log.info("[CORE-Worker-{}] D2: {}", workerId, event.getData2() != null ? event.getData2() : "N/A");
-        log.info("[CORE-Worker-{}] D3: {}", workerId, event.getData3() != null ? event.getData3() : "N/A");
-        log.info("[CORE-Worker-{}] D4: {}", workerId, event.getData4() != null ? event.getData4() : "N/A");
-        log.info("[CORE-Worker-{}] D5: {}", workerId, event.getData5() != null ? event.getData5() : "N/A");
+        
+        // Log với DataField object
+        if (event.getData1() != null) {
+            String name = event.getData1().getName() != null ? event.getData1().getName() : "Data 1";
+            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData1().getValue());
+        }
+        
+        if (event.getData2() != null) {
+            String name = event.getData2().getName() != null ? event.getData2().getName() : "Data 2";
+            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData2().getValue());
+        }
+        
+        if (event.getData3() != null) {
+            String name = event.getData3().getName() != null ? event.getData3().getName() : "Data 3";
+            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData3().getValue());
+        }
+        
+        if (event.getData4() != null) {
+            String name = event.getData4().getName() != null ? event.getData4().getName() : "Data 4";
+            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData4().getValue());
+        }
+        
+        if (event.getData5() != null) {
+            String name = event.getData5().getName() != null ? event.getData5().getName() : "Data 5";
+            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData5().getValue());
+        }
+        
         log.info("=====================================");
     }
     
