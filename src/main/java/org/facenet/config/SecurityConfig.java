@@ -101,7 +101,7 @@ public class SecurityConfig {
                 // Enable CORS
                 .cors(cors -> {})
 
-                // Allow iframe (H2 Console, Swagger UI)
+                // Allow iframe (H2 Console)
                 .headers(headers ->
                         headers.frameOptions(frame -> frame.sameOrigin())
                 )
@@ -124,17 +124,6 @@ public class SecurityConfig {
 
                         // H2 Console
                         .requestMatchers("/h2-console/**").permitAll()
-
-                        // Swagger / OpenAPI
-                        .requestMatchers(
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/swagger-ui/index.html",
-                                "/v3/api-docs/**",
-                                "/api-docs/**",
-                                "/swagger-resources/**",
-                                "/webjars/**"
-                        ).permitAll()
 
                         // Actuator
                         .requestMatchers("/actuator/**").permitAll()

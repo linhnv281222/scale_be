@@ -1,10 +1,8 @@
 package org.facenet.dto.rbac;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import jdk.jshell.Snippet;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,14 +23,11 @@ public class PermissionDto {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    @Schema(name = "PermissionCreateUpdateRequest", description = "Request payload để tạo hoặc cập nhật quyền hạn")
     public static class Request {
-        @Schema(description = "Mã quyền hạn (unique)", example = "READ_USER", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "Permission code is required")
         @Size(max = 50, message = "Code must not exceed 50 characters")
         private String code;
 
-        @Schema(description = "Mô tả quyền hạn", example = "Quyền đọc thông tin người dùng")
         @Size(max = 200, message = "Description must not exceed 200 characters")
         private String description;
     }
@@ -44,28 +39,20 @@ public class PermissionDto {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    @Schema(name = "PermissionResponse", description = "Response payload cho quyền hạn")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Response {
-        @Schema(description = "ID quyền hạn", example = "1")
         private Integer id;
 
-        @Schema(description = "Tên quyền hạn", example = "READ_USER")
         private String name;
 
-        @Schema(description = "Resource", example = "USER")
         private String resource;
 
-        @Schema(description = "Action", example = "READ")
         private String action;
 
-        @Schema(description = "Mô tả quyền hạn", example = "Quyền đọc thông tin người dùng")
         private String description;
 
-        @Schema(description = "Thời gian tạo", example = "2023-12-01T10:00:00Z")
         private OffsetDateTime createdAt;
 
-        @Schema(description = "Người tạo", example = "admin")
         private String createdBy;
     }
 }

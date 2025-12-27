@@ -1,10 +1,6 @@
 package org.facenet.controller.report;
 
 import com.lowagie.text.DocumentException;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -39,8 +35,6 @@ import java.util.Map;
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Enterprise Reports", description = "Enterprise reporting system with full audit trail")
-@SecurityRequirement(name = "Bearer Authentication")
 public class EnterpriseReportController {
 
     private final ReportDefinitionService reportDefinitionService;
@@ -52,22 +46,13 @@ public class EnterpriseReportController {
      * This is the primary method for exporting reports
      */
     @PostMapping("/{reportCode}/export")
-    @Operation(
-        summary = "Export report by code",
-        description = "Export report using predefined report code (e.g., BCSL, BCCN, BCCT). " +
-                     "Report must be ACTIVE to be exported. " +
-                     "Full audit trail is maintained for all exports."
-    )
     public ResponseEntity<byte[]> exportByCode(
-            @Parameter(description = "Report code (e.g., BCSL, BCCN)", required = true)
             @PathVariable String reportCode,
             
-            @Parameter(description = "Export format: excel, word, or pdf", required = true)
             @RequestParam String format,
             
             @Valid @RequestBody ReportExportRequest request,
             
-            @Parameter(description = "Template ID (optional)")
             @RequestParam(required = false) Long templateId,
             
             HttpServletRequest httpRequest) {
@@ -150,10 +135,6 @@ public class EnterpriseReportController {
      * Get list of available reports
      */
     @GetMapping("/definitions")
-    @Operation(
-        summary = "Get available reports",
-        description = "Get list of all executable (ACTIVE) report definitions"
-    )
     public ResponseEntity<ApiResponse<List<ReportDefinition>>> getReportDefinitions() {
         List<ReportDefinition> reports = reportDefinitionService.getExecutableReports();
         return ResponseEntity.ok(ApiResponse.success(
@@ -166,10 +147,6 @@ public class EnterpriseReportController {
      * Get report definition by code
      */
     @GetMapping("/definitions/{reportCode}")
-    @Operation(
-        summary = "Get report definition",
-        description = "Get detailed information about a specific report"
-    )
     public ResponseEntity<ApiResponse<ReportDefinition>> getReportDefinition(
             @PathVariable String reportCode) {
         ReportDefinition definition = reportDefinitionService.getByCode(reportCode);
@@ -183,10 +160,6 @@ public class EnterpriseReportController {
      * Get execution history for a report
      */
     @GetMapping("/{reportCode}/history")
-    @Operation(
-        summary = "Get execution history",
-        description = "Get execution history for a specific report with pagination"
-    )
     public ResponseEntity<ApiResponse<Page<ReportExecutionHistory>>> getExecutionHistory(
             @PathVariable String reportCode,
             @RequestParam(defaultValue = "0") int page,
@@ -207,10 +180,6 @@ public class EnterpriseReportController {
      * Get recent executions across all reports
      */
     @GetMapping("/history/recent")
-    @Operation(
-        summary = "Get recent executions",
-        description = "Get recent report executions across all reports"
-    )
     public ResponseEntity<ApiResponse<Page<ReportExecutionHistory>>> getRecentExecutions(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -227,10 +196,6 @@ public class EnterpriseReportController {
      * Get execution statistics
      */
     @GetMapping("/statistics")
-    @Operation(
-        summary = "Get execution statistics",
-        description = "Get overall statistics for report executions"
-    )
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStatistics() {
         Map<String, Long> stats = executionHistoryService.getStatistics();
         

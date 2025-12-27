@@ -1,7 +1,5 @@
 package org.facenet.controller.scale;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/reports")
 @RequiredArgsConstructor
-@Tag(name = "Scale Reports", description = "Scale report and statistics APIs")
 public class ScaleReportController {
 
     private final ReportService reportService;
@@ -29,7 +26,6 @@ public class ScaleReportController {
      * Generate report based on request parameters
      */
     @PostMapping("/generate")
-    @Operation(summary = "Generate report", description = "Generate report with specified parameters")
     public ResponseEntity<ApiResponse<ReportResponseDto>> generateReport(
             @Valid @RequestBody ReportRequestDto request) {
 
@@ -50,7 +46,6 @@ public class ScaleReportController {
      */
     @PostMapping("/aggregate-daily")
     @PreAuthorize("hasAuthority('ADMIN')")
-    @Operation(summary = "Trigger daily aggregation", description = "Manually trigger daily data aggregation")
     public ResponseEntity<ApiResponse<String>> aggregateDailyData() {
 
         log.info("[REPORT-API] Manually triggering daily aggregation");

@@ -1,9 +1,6 @@
 package org.facenet.controller.report;
 
 import com.lowagie.text.DocumentException;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,8 +22,6 @@ import java.io.IOException;
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Reports", description = "Report export API (Excel, Word, PDF)")
-@SecurityRequirement(name = "Bearer Authentication")
 public class ReportController {
 
     private final ReportExportService reportExportService;
@@ -39,13 +34,6 @@ public class ReportController {
      */
     @PostMapping("/export")
 //    @PreAuthorize("hasAnyAuthority('ADMIN', 'MANAGER', 'OPERATOR')")
-    @Operation(
-        summary = "Export report",
-        description = "Export weighing report to Excel, Word, or PDF format using dynamic templates. " +
-                     "Data is fetched from weighing_logs and aggregated by scale. " +
-                     "JSONB data fields are converted to numbers for calculations. " +
-                     "Optional templateId parameter to use specific template, otherwise uses default template for the export type."
-    )
     public ResponseEntity<byte[]> exportReport(
             @Valid @RequestBody ReportExportRequest request,
             @RequestParam(required = false) Long templateId) {
@@ -86,11 +74,6 @@ public class ReportController {
      */
     @PostMapping("/preview")
 //    @PreAuthorize("hasAnyAuthority('ADMIN', 'MANAGER', 'OPERATOR')")
-    @Operation(
-        summary = "Preview report statistics",
-        description = "Get report summary without generating the file. " +
-                     "Returns statistics like total records, scales, and aggregated values."
-    )
     public ResponseEntity<ApiResponse<Object>> previewReport(@Valid @RequestBody ReportExportRequest request) {
         try {
             log.info("Preview report request: startTime={}, endTime={}", 
@@ -115,7 +98,6 @@ public class ReportController {
      * Health check endpoint
      */
     @GetMapping("/health")
-    @Operation(summary = "Check report service health", description = "Verify that report export services are available")
     public ResponseEntity<ApiResponse<String>> healthCheck() {
         return ResponseEntity.ok(ApiResponse.success(
                 "Report service is healthy",
