@@ -32,7 +32,7 @@ import java.util.Map;
  * All exports must go through defined report codes
  */
 @RestController
-@RequestMapping("/api/v1/reports")
+@RequestMapping("/reports")
 @RequiredArgsConstructor
 @Slf4j
 public class EnterpriseReportController {
@@ -47,13 +47,13 @@ public class EnterpriseReportController {
      */
     @PostMapping("/{reportCode}/export")
     public ResponseEntity<byte[]> exportByCode(
-            @PathVariable String reportCode,
+            @PathVariable(name = "reportCode") String reportCode,
             
-            @RequestParam String format,
+            @RequestParam(name = "format") String format,
             
             @Valid @RequestBody ReportExportRequest request,
             
-            @RequestParam(required = false) Long templateId,
+            @RequestParam(name = "templateId", required = false) Long templateId,
             
             HttpServletRequest httpRequest) {
         
@@ -148,7 +148,7 @@ public class EnterpriseReportController {
      */
     @GetMapping("/definitions/{reportCode}")
     public ResponseEntity<ApiResponse<ReportDefinition>> getReportDefinition(
-            @PathVariable String reportCode) {
+            @PathVariable(name = "reportCode") String reportCode) {
         ReportDefinition definition = reportDefinitionService.getByCode(reportCode);
         return ResponseEntity.ok(ApiResponse.success(
                 definition,
@@ -161,9 +161,9 @@ public class EnterpriseReportController {
      */
     @GetMapping("/{reportCode}/history")
     public ResponseEntity<ApiResponse<Page<ReportExecutionHistory>>> getExecutionHistory(
-            @PathVariable String reportCode,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @PathVariable(name = "reportCode") String reportCode,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
         
         Page<ReportExecutionHistory> history = executionHistoryService.getHistoryByReportCode(
                 reportCode,
@@ -181,8 +181,8 @@ public class EnterpriseReportController {
      */
     @GetMapping("/history/recent")
     public ResponseEntity<ApiResponse<Page<ReportExecutionHistory>>> getRecentExecutions(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
         
         Page<ReportExecutionHistory> history = executionHistoryService.getRecentExecutions(page, size);
         

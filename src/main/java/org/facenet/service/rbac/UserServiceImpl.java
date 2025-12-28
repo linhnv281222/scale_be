@@ -92,6 +92,9 @@ public class UserServiceImpl implements UserService {
         if (request.getFullName() != null) {
             user.setFullName(request.getFullName());
         }
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        }
         if (request.getStatus() != null) {
             user.setStatus(request.getStatus());
         }

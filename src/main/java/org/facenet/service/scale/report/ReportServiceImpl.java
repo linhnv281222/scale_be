@@ -142,10 +142,13 @@ public class ReportServiceImpl implements ReportService {
      * Data in weighing_logs is stored as string, need to cast to NUMERIC for aggregation
      */
     private String buildAggregationExpression(ReportRequestDto.AggregationMethod method, String dataField) {
+        // Validate and normalize dataField to proper column name
+        String columnName = normalizeDataFieldName(dataField);
+        
         // Cast string data to NUMERIC, handle invalid values as 0
         String castExpression = String.format(
-                "COALESCE(NULLIF(%s, '')::NUMERIC, 0)",
-                dataField
+                "COALESCE(NULLIF(TRIM(%s), '')::NUMERIC, 0)",
+                columnName
         );
 
         return switch (method) {
@@ -153,6 +156,38 @@ public class ReportServiceImpl implements ReportService {
             case AVG -> String.format("AVG(%s)", castExpression);
             case MAX -> String.format("MAX(%s)", castExpression);
         };
+    }
+    
+    /**
+     * Normalize data field name to proper column name
+     * Ensures the field name matches the actual column in database
+     */
+    private String normalizeDataFieldName(String dataField) {
+        if (dataField == null || dataField.trim().isEmpty()) {
+            throw new IllegalArgumentException("Data field cannot be null or empty");
+        }
+        
+        // Convert to lowercase and remove any whitespace
+        String normalized = dataField.toLowerCase().trim();
+        
+        // If it's already in correct format (data_1, data_2, etc.), return it
+        if (normalized.matches("data_[1-5]")) {
+            return normalized;
+        }
+        
+        // If it's in format like "data1", "data2", convert to "data_1", "data_2"
+        if (normalized.matches("data[1-5]")) {
+            return normalized.replace("data", "data_");
+        }
+        
+        // If it's just a number (1-5), convert to "data_N"
+        if (normalized.matches("[1-5]")) {
+            return "data_" + normalized;
+        }
+        
+        // Default fallback - assume it's data_1 if invalid
+        log.warn("Invalid data field '{}', defaulting to data_1", dataField);
+        return "data_1";
     }
 
     /**

@@ -116,6 +116,15 @@ public class SecurityConfig {
                         // Auth endpoints (allow both with and without /api/v1 prefix)
                         .requestMatchers("/auth/**", "/api/v1/auth/**").permitAll()
 
+                        // Swagger/OpenAPI endpoints
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/swagger-resources/**",
+                                "/swagger-ui.html",
+                                "/webjars/**"
+                        ).permitAll()
+
                         // WebSocket (cho phép cả endpoint và SockJS paths)
                         .requestMatchers("/ws/**", "/ws-scalehub/**", "/api/v1/ws-scalehub/**").permitAll()
                         

@@ -10,6 +10,7 @@ import org.facenet.entity.scale.WeighingLog;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.facenet.repository.scale.WeighingLogRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,13 +31,50 @@ public class ReportDataService {
     private final WeighingLogRepository weighingLogRepository;
     private final ScaleRepository scaleRepository;
     private final ScaleConfigRepository scaleConfigRepository;
+    private final JdbcTemplate jdbcTemplate;
+    private final ReportAggregationService aggregationService;
 
     /**
      * Fetch and process report data based on request
+     * ENHANCED: Supports aggregation, time intervals, and flexible filtering
      */
     @Transactional(readOnly = true)
     public ReportData fetchReportData(ReportExportRequest request) {
-        log.info("Fetching report data for period {} to {}", request.getStartTime(), request.getEndTime());
+        log.info("Fetching report data: period={} to {}, aggregation={}, interval={}", 
+                request.getStartTime(), request.getEndTime(), 
+                request.getAggregationMethod(), request.getTimeInterval());
+
+        // If aggregation method or time interval is specified, use aggregation service
+        if (request.getAggregationMethod() != ReportExportRequest.AggregationMethod.SUM || 
+            request.getTimeInterval() != null) {
+            
+            log.info("Using aggregation service for advanced filtering");
+            
+            // Choose strategy based on interval
+            if (request.getTimeInterval() != null && 
+                (request.getTimeInterval() == ReportExportRequest.TimeInterval.WEEK ||
+                 request.getTimeInterval() == ReportExportRequest.TimeInterval.MONTH ||
+                 request.getTimeInterval() == ReportExportRequest.TimeInterval.YEAR)) {
+                // Use pre-aggregated data
+                return aggregationService.fetchAggregatedReportData(request);
+            } else {
+                // Use ad-hoc aggregation
+                return aggregationService.fetchAdHocAggregatedData(request);
+            }
+        }
+        
+        // LEGACY PATH: Simple SUM without intervals (backward compatible)
+        log.info("Using legacy simple SUM path for backward compatibility");
+        return fetchSimpleReportData(request);
+    }
+    
+    /**
+     * LEGACY: Fetch simple report data (for backward compatibility)
+     * Used when no special aggregation or interval is requested
+     */
+    @Transactional(readOnly = true)
+    private ReportData fetchSimpleReportData(ReportExportRequest request) {
+        log.info("Fetching simple report data for period {} to {}", request.getStartTime(), request.getEndTime());
 
         // Fetch weighing logs
         List<WeighingLog> logs = weighingLogRepository.findAllInTimeRange(
@@ -145,32 +183,41 @@ public class ReportDataService {
 
     /**
      * Convert JSONB string to Double
-     * JSONB data is stored as plain string like "150.5" or as JSON string "\"150.5\""
+     * Handles multiple formats:
+     * - Plain string: "150.5" (most common)
+     * - JSON string: "\"150.5\"" (quoted)
+     * - Numeric: 150.5 (direct number)
      * Also handles null, empty, and non-numeric values
      */
     private Double parseJsonbValue(String jsonbValue) {
         if (jsonbValue == null || jsonbValue.trim().isEmpty() || jsonbValue.equalsIgnoreCase("null")) {
-            log.debug("Null/empty value, returning 0.0");
             return 0.0;
         }
 
         try {
-            // Remove quotes if present (handles both "123" and \"123\")
-            String cleanValue = jsonbValue
-                    .replaceAll("^\"|\"$", "")  // Remove leading/trailing quotes
-                    .replaceAll("\\\\\"", "\"")  // Unescape escaped quotes
-                    .trim();
+            String cleanValue = jsonbValue.trim();
             
+            // Remove JSON quotes if present: \"123\" -> 123
+            if (cleanValue.startsWith("\\\"") && cleanValue.endsWith("\\\"")) {
+                cleanValue = cleanValue.substring(2, cleanValue.length() - 2);
+            }
+            // Remove regular quotes: "123" -> 123
+            else if (cleanValue.startsWith("\"") && cleanValue.endsWith("\"")) {
+                cleanValue = cleanValue.substring(1, cleanValue.length() - 1);
+            }
+            
+            cleanValue = cleanValue.trim();
             if (cleanValue.isEmpty()) {
-                log.debug("Empty after cleaning, returning 0.0");
                 return 0.0;
             }
             
             double result = Double.parseDouble(cleanValue);
-            log.debug("Successfully parsed '{}' -> {}", jsonbValue, result);
+            if (log.isTraceEnabled()) {
+                log.trace("Parsed '{}' -> {}", jsonbValue, result);
+            }
             return result;
         } catch (NumberFormatException e) {
-            log.warn("Failed to parse JSONB value: '{}' - {}", jsonbValue, e.getMessage());
+            log.warn("Failed to parse JSONB value: '{}' - returning 0.0", jsonbValue);
             return 0.0;
         }
     }
@@ -256,19 +303,22 @@ public class ReportDataService {
     }
     
     /**
-     * Get column names from scale config
+     * Get column names from scale configs
+     * Tries to get from first scale with config, falls back to defaults
      * Returns array of 5 names for data_1 to data_5
      */
-    private String[] getColumnNamesFromConfig(Long scaleId) {
-        String[] defaultNames = {"Data 1 (kg)", "Data 2 (kg)", "Data 3 (kg)", "Data 4 (kg)", "Data 5 (kg)"};
+    private String[] getColumnNamesFromConfig(Long sampleScaleId) {
+        String[] defaultNames = {"Khối lượng (kg)", "Nhiệt độ (°C)", "Độ ẩm (%)", "Áp suất (hPa)", "Tốc độ (m/s)"};
         
-        if (scaleId == null) {
+        if (sampleScaleId == null) {
             return defaultNames;
         }
         
         try {
-            Optional<ScaleConfig> configOpt = scaleConfigRepository.findById(scaleId);
+            // Try to get config from the provided scale
+            Optional<ScaleConfig> configOpt = scaleConfigRepository.findById(sampleScaleId);
             if (configOpt.isEmpty()) {
+                log.debug("No config found for scale {}, using defaults", sampleScaleId);
                 return defaultNames;
             }
             
@@ -276,15 +326,16 @@ public class ReportDataService {
             String[] names = new String[5];
             
             // Extract name from each data_n JSON: {"name": "Khối lượng", "data_type": "FLOAT"}
-            names[0] = extractNameFromDataConfig(config.getData1(), "Data 1");
-            names[1] = extractNameFromDataConfig(config.getData2(), "Data 2");
-            names[2] = extractNameFromDataConfig(config.getData3(), "Data 3");
-            names[3] = extractNameFromDataConfig(config.getData4(), "Data 4");
-            names[4] = extractNameFromDataConfig(config.getData5(), "Data 5");
+            names[0] = extractNameFromDataConfig(config.getData1(), defaultNames[0]);
+            names[1] = extractNameFromDataConfig(config.getData2(), defaultNames[1]);
+            names[2] = extractNameFromDataConfig(config.getData3(), defaultNames[2]);
+            names[3] = extractNameFromDataConfig(config.getData4(), defaultNames[3]);
+            names[4] = extractNameFromDataConfig(config.getData5(), defaultNames[4]);
             
+            log.debug("Loaded column names from scale {}: {}", sampleScaleId, String.join(", ", names));
             return names;
         } catch (Exception e) {
-            log.warn("Failed to get column names from config: {}", e.getMessage());
+            log.warn("Failed to get column names from config for scale {}: {}", sampleScaleId, e.getMessage());
             return defaultNames;
         }
     }

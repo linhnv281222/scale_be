@@ -5,9 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.dto.report.ReportData;
 import org.facenet.entity.report.*;
 import org.facenet.entity.scale.Scale;
+import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.entity.scale.WeighingLog;
 import org.facenet.repository.report.OrganizationSettingsRepository;
 import org.facenet.repository.report.ReportTemplateRepository;
+import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.facenet.repository.scale.WeighingLogRepository;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class ReportTemplateService {
     private final OrganizationSettingsRepository organizationRepository;
     private final WeighingLogRepository weighingLogRepository;
     private final ScaleRepository scaleRepository;
+    private final ScaleConfigRepository scaleConfigRepository;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -96,11 +99,29 @@ public class ReportTemplateService {
     ) {
         log.info("Building report data with template: {} for period {} to {}", 
                 template.getCode(), startTime, endTime);
+        
+        // Validate inputs
+        if (startTime == null || endTime == null) {
+            throw new IllegalArgumentException("Start time and end time must not be null");
+        }
+        
+        if (startTime.isAfter(endTime)) {
+            throw new IllegalArgumentException("Start time must be before end time");
+        }
 
         OrganizationSettings org = getOrganizationSettings();
 
         // Fetch weighing logs
+        log.info("Fetching weighing logs from {} to {} for scales: {}", 
+                startTime, endTime, scaleIds != null ? scaleIds : "ALL");
+        
+        // Log timezone info for debugging
+        log.info("Timezone info - startTime zone: {}, endTime zone: {}", 
+                startTime.getOffset(), endTime.getOffset());
+        
         List<WeighingLog> logs = weighingLogRepository.findAllInTimeRange(startTime, endTime);
+        
+        log.info("Fetched {} weighing logs before filtering", logs.size());
 
         // Filter by scale IDs if specified
         if (scaleIds != null && !scaleIds.isEmpty()) {
@@ -109,7 +130,26 @@ public class ReportTemplateService {
                     .collect(Collectors.toList());
         }
 
-        log.info("Found {} weighing logs", logs.size());
+        log.info("Found {} weighing logs for period {} to {}", logs.size(), startTime, endTime);
+        
+        // Log sample data for debugging
+        if (!logs.isEmpty()) {
+            WeighingLog sample = logs.get(0);
+            log.info("Sample weighing log: scaleId={}, data1='{}', data2='{}', data3='{}', data4='{}', data5='{}'",
+                    sample.getScaleId(), 
+                    sample.getData1(), 
+                    sample.getData2(), 
+                    sample.getData3(), 
+                    sample.getData4(), 
+                    sample.getData5());
+        } else {
+            log.warn("No weighing logs found in time range {} to {}", startTime, endTime);
+        }
+        
+        // Determine which data fields have actual data (not null/empty)
+        boolean[] hasData = determineActiveDataFields(logs);
+        log.info("Active data fields: data_1={}, data_2={}, data_3={}, data_4={}, data_5={}", 
+                hasData[0], hasData[1], hasData[2], hasData[3], hasData[4]);
 
         // Group data by scale
         Map<Long, List<WeighingLog>> logsByScale = logs.stream()
@@ -156,6 +196,19 @@ public class ReportTemplateService {
         metadata.put("organizationName", org.getCompanyName());
         metadata.put("watermark", org.getWatermarkText());
         metadata.put("template", template);
+        
+        // Get column names from scale config (only for fields with config)
+        String[] columnNames = getColumnNamesFromConfig(uniqueScaleIds.isEmpty() ? null : uniqueScaleIds.get(0));
+        
+        // Set column names in metadata for reference (only non-null names)
+        metadata.put("activeFields", hasData);
+        List<String> activeColumnNames = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            if (columnNames[i] != null) {
+                activeColumnNames.add(columnNames[i]);
+            }
+        }
+        metadata.put("columnNames", activeColumnNames);
 
         return ReportData.builder()
                 .reportTitle(title)
@@ -167,7 +220,47 @@ public class ReportTemplateService {
                 .rows(rows)
                 .summary(summary)
                 .metadata(metadata)
+                .data1Name(columnNames[0])
+                .data2Name(columnNames[1])
+                .data3Name(columnNames[2])
+                .data4Name(columnNames[3])
+                .data5Name(columnNames[4])
                 .build();
+    }
+    
+    /**
+     * Determine which data fields have actual data across all logs
+     * Returns boolean array [data_1, data_2, data_3, data_4, data_5]
+     */
+    private boolean[] determineActiveDataFields(List<WeighingLog> logs) {
+        boolean[] hasData = new boolean[5];
+        
+        if (logs.isEmpty()) {
+            return hasData; // All false
+        }
+        
+        // Check each data field across all logs
+        for (WeighingLog log : logs) {
+            if (!hasData[0] && isNotEmpty(log.getData1())) hasData[0] = true;
+            if (!hasData[1] && isNotEmpty(log.getData2())) hasData[1] = true;
+            if (!hasData[2] && isNotEmpty(log.getData3())) hasData[2] = true;
+            if (!hasData[3] && isNotEmpty(log.getData4())) hasData[3] = true;
+            if (!hasData[4] && isNotEmpty(log.getData5())) hasData[4] = true;
+            
+            // Early exit if all fields have data
+            if (hasData[0] && hasData[1] && hasData[2] && hasData[3] && hasData[4]) {
+                break;
+            }
+        }
+        
+        return hasData;
+    }
+    
+    /**
+     * Check if string value is not empty (not null, not empty, not "null")
+     */
+    private boolean isNotEmpty(String value) {
+        return value != null && !value.trim().isEmpty() && !value.equalsIgnoreCase("null");
     }
 
     /**
@@ -216,17 +309,36 @@ public class ReportTemplateService {
     private Double calculateAggregation(List<WeighingLog> logs, ReportColumn column) {
         String field = column.getDataField();
         ReportColumn.AggregationType aggType = column.getAggregationType();
-
+        if (!logs.isEmpty()) {
+            for (int i = 0; i < Math.min(3, logs.size()); i++) {
+                WeighingLog logEntry = logs.get(i);
+                String rawValue = switch (field) {
+                    case "data_1" -> logEntry.getData1();
+                    case "data_2" -> logEntry.getData2();
+                    case "data_3" -> logEntry.getData3();
+                    case "data_4" -> logEntry.getData4();
+                    case "data_5" -> logEntry.getData5();
+                    default -> null;
+                };
+                log.info("  Log #{}: {} = '{}'", i + 1, field, rawValue);
+            }
+        }
+        
         List<Double> values = logs.stream()
                 .map(log -> extractValue(log, field))
                 .filter(Objects::nonNull)
+                .filter(v -> v != 0.0) // Filter out zeros for debugging
                 .collect(Collectors.toList());
 
         if (values.isEmpty()) {
+            log.warn("No non-zero values extracted from field {} (all null, invalid, or zero). Returning 0.0", field);
             return 0.0;
         }
+        
+        log.info("Extracted {} non-zero values from field {}: {}", values.size(), field, 
+                values.size() <= 5 ? values : values.subList(0, 5) + "...");
 
-        return switch (aggType) {
+        Double result = switch (aggType) {
             case SUM -> values.stream().reduce(0.0, Double::sum);
             case AVG -> values.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
             case MAX -> values.stream().max(Double::compare).orElse(0.0);
@@ -234,37 +346,90 @@ public class ReportTemplateService {
             case COUNT -> (double) values.size();
             case NONE -> values.isEmpty() ? 0.0 : values.get(0);
         };
+        
+        log.info("Result for {} on {}: {}", aggType, field, result);
+        return result;
     }
 
     /**
      * Extract value from weighing log by field name
      */
-    private Double extractValue(WeighingLog log, String field) {
-        String jsonbValue = switch (field) {
-            case "data_1" -> log.getData1();
-            case "data_2" -> log.getData2();
-            case "data_3" -> log.getData3();
-            case "data_4" -> log.getData4();
-            case "data_5" -> log.getData5();
+    private Double extractValue(WeighingLog weighingLog, String field) {
+        String rawValue = switch (field) {
+            case "data_1" -> weighingLog.getData1();
+            case "data_2" -> weighingLog.getData2();
+            case "data_3" -> weighingLog.getData3();
+            case "data_4" -> weighingLog.getData4();
+            case "data_5" -> weighingLog.getData5();
             default -> null;
         };
 
-        return parseJsonbValue(jsonbValue);
+        if (rawValue != null && log.isDebugEnabled()) {
+            log.debug("Extracting {} from weighing log: raw value = '{}' (type: {})", 
+                    field, rawValue, rawValue.getClass().getSimpleName());
+        }
+        
+        Double result = parseJsonbValue(rawValue);
+        
+        if (log.isDebugEnabled()) {
+            log.debug("Parsed {} from raw '{}' -> {}", field, rawValue, result);
+        }
+        
+        return result;
     }
 
     /**
-     * Parse JSONB string to Double
+     * Parse VARCHAR string to Double
+     * Handles multiple formats:
+     * - Plain string: "150.5" or "131075"
+     * - JSON string: "\"150.5\""
+     * - Numeric: 150.5
+     * - null, empty, "null" -> 0.0
+     * 
+     * Data in weighing_log is VARCHAR, so we parse string to number
      */
     private Double parseJsonbValue(String jsonbValue) {
-        if (jsonbValue == null || jsonbValue.trim().isEmpty()) {
+        if (jsonbValue == null) {
+            log.debug("Value is null, returning 0.0");
+            return 0.0;
+        }
+        
+        String trimmed = jsonbValue.trim();
+        if (trimmed.isEmpty() || trimmed.equalsIgnoreCase("null")) {
+            log.debug("Value is empty or 'null', returning 0.0");
             return 0.0;
         }
 
         try {
-            String cleanValue = jsonbValue.replaceAll("\"", "").trim();
-            return Double.parseDouble(cleanValue);
+            String cleanValue = trimmed;
+            
+            log.debug("Parsing value: original='{}', length={}", cleanValue, cleanValue.length());
+            
+            // Remove JSON escape quotes: \"123\" -> 123
+            if (cleanValue.startsWith("\\\"") && cleanValue.endsWith("\\\"")) {
+                cleanValue = cleanValue.substring(2, cleanValue.length() - 2);
+                log.debug("Removed escape quotes: '{}'", cleanValue);
+            }
+            // Remove regular quotes: "123" -> 123
+            else if (cleanValue.startsWith("\"") && cleanValue.endsWith("\"")) {
+                cleanValue = cleanValue.substring(1, cleanValue.length() - 1);
+                log.debug("Removed regular quotes: '{}'", cleanValue);
+            }
+            
+            cleanValue = cleanValue.trim();
+            if (cleanValue.isEmpty()) {
+                log.debug("Empty value after cleaning, returning 0.0");
+                return 0.0;
+            }
+            
+            // Parse VARCHAR string to double
+            double result = Double.parseDouble(cleanValue);
+            log.info("Successfully parsed '{}' -> {}", jsonbValue, result);
+            return result;
+            
         } catch (NumberFormatException e) {
-            log.warn("Failed to parse JSONB value: {}", jsonbValue);
+            log.error("Failed to parse VARCHAR value: '{}' (length={}) - Error: {}", 
+                    jsonbValue, jsonbValue.length(), e.getMessage());
             return 0.0;
         }
     }
@@ -347,6 +512,115 @@ public class ReportTemplateService {
     public List<ReportTemplate> getAllActiveTemplates() {
         return templateRepository.findByIsActiveTrueOrderByReportTypeAscNameAsc();
     }
+    
+    /**
+     * Get column names from scale configs
+     * Returns array of 5 names for data_1 to data_5
+     * If config is null/empty or is_used=false, returns null for that position
+     */
+    private String[] getColumnNamesFromConfig(Long sampleScaleId) {
+        String[] names = new String[5]; // All null by default
+        
+        if (sampleScaleId == null) {
+            return names;
+        }
+        
+        try {
+            Optional<ScaleConfig> configOpt = scaleConfigRepository.findById(sampleScaleId);
+            if (configOpt.isEmpty()) {
+                log.debug("No config found for scale {}", sampleScaleId);
+                return names;
+            }
+            
+            ScaleConfig config = configOpt.get();
+            
+            // Extract name only if config exists and is_used=true
+            names[0] = extractNameFromDataConfig(config.getData1());
+            names[1] = extractNameFromDataConfig(config.getData2());
+            names[2] = extractNameFromDataConfig(config.getData3());
+            names[3] = extractNameFromDataConfig(config.getData4());
+            names[4] = extractNameFromDataConfig(config.getData5());
+
+            log.debug("Loaded column names from scale {}: data1={}, data2={}, data3={}, data4={}, data5={}", 
+                    sampleScaleId, names[0], names[1], names[2], names[3], names[4]);
+            return names;
+        } catch (Exception e) {
+            log.warn("Failed to get column names from config for scale {}: {}", sampleScaleId, e.getMessage());
+            return names;
+        }
+    }
+    
+    /**
+     * Extract name from data config JSON
+     * Config format: {"name": "Weight", "is_used": true, "data_type": "integer", ...}
+     * Only return name if config is not empty and is_used = true
+     */
+    private String extractNameFromDataConfig(Map<String, Object> dataConfig) {
+        if (dataConfig == null || dataConfig.isEmpty()) {
+            return null;
+        }
+
+        // Check if field is used
+        Object isUsedObj = dataConfig.get("is_used");
+        boolean isUsed = isUsedObj != null && (isUsedObj instanceof Boolean ? (Boolean) isUsedObj : Boolean.parseBoolean(isUsedObj.toString()));
+
+        if (!isUsed) {
+            log.debug("Field is not used (is_used=false), returning null");
+            return null;
+        }
+
+        // Get name field
+        Object nameObj = dataConfig.get("name");
+        if (nameObj == null) {
+            log.debug("Field name is null, returning null");
+            return null;
+        }
+
+        String name = nameObj.toString().trim();
+        if (name.isEmpty()) {
+            log.debug("Field name is empty, returning null");
+            return null;
+        }
+
+        log.debug("Using configured field name: {}", name);
+        return name;
+    }
+    
+    /**
+     * Extract name from data config JSON
+     * Config format: {"name": "Weight", "is_used": true, "data_type": "integer", ...}
+     * Only return name if is_used = true, otherwise return default
+     */
+//    private String extractNameFromDataConfig(Map<String, Object> dataConfig, String defaultName) {
+//        if (dataConfig == null) {
+//            return defaultName;
+//        }
+//
+//        // Check if field is used
+//        Object isUsedObj = dataConfig.get("is_used");
+//        boolean isUsed = isUsedObj != null && (isUsedObj instanceof Boolean ? (Boolean) isUsedObj : Boolean.parseBoolean(isUsedObj.toString()));
+//
+//        if (!isUsed) {
+//            log.debug("Field is not used (is_used=false), returning default name");
+//            return defaultName;
+//        }
+//
+//        // Get name field
+//        Object nameObj = dataConfig.get("name");
+//        if (nameObj == null) {
+//            log.debug("Field name is null, returning default name");
+//            return defaultName;
+//        }
+//
+//        String name = nameObj.toString().trim();
+//        if (name.isEmpty()) {
+//            log.debug("Field name is empty, returning default name");
+//            return defaultName;
+//        }
+//
+//        log.debug("Using configured field name: {}", name);
+//        return name;
+//    }
 
     /**
      * Get templates by type

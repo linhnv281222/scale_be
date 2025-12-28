@@ -607,7 +607,7 @@ public class ExcelExportService {
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
-        style.setWrapText(ReportLayoutConstants.ENTERPRISE_STANDARD.TABLE_HEADER_BOLD);
+        style.setWrapText(true);
         return style;
     }
 

@@ -1,0 +1,1009 @@
+{
+	"info": {
+		"_postman_id": "scalehub-iot-api",
+		"name": "ScaleHub IoT API",
+		"description": "Complete API documentation for ScaleHub IoT - Weighing System Management\n\n## Base URL\n- Development: `http://localhost:8080`\n- Production: Configure your production URL\n\n## Authentication\nAll APIs (except Auth endpoints) require JWT Bearer Token.\n\n### How to use:\n1. Login via `/auth/login` to get `access_token`\n2. Set token in Authorization tab (Type: Bearer Token)\n3. Token is valid for 24 hours\n\n## Modules\n- **Authentication**: Login, refresh token, logout\n- **RBAC**: Users, Roles, Permissions management\n- **Locations**: Hierarchical location management\n- **Scales**: Scale device management with configurations\n- **Monitoring**: Real-time scale state monitoring\n- **Reports**: Export reports (Excel, Word, PDF)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.access_token) {",
+									"        pm.collectionVariables.set('access_token', response.data.access_token);",
+									"        pm.collectionVariables.set('refresh_token', response.data.refresh_token);",
+									"        console.log('✅ Tokens saved to collection variables');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Login with username and password. Returns JWT access token and refresh token."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"refresh"
+							]
+						},
+						"description": "Refresh expired access token using refresh token."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"me"
+							]
+						},
+						"description": "Get current authenticated user information."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Logout and invalidate current session."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for login, token refresh, and user info."
+		},
+		{
+			"name": "Locations",
+			"item": [
+				{
+					"name": "Get All Locations",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/locations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"locations"
+							]
+						},
+						"description": "Get all locations (flat list)."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Locations Tree",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/locations/tree",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"locations",
+								"tree"
+							]
+						},
+						"description": "Get locations in hierarchical tree structure."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Location By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/locations/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"locations",
+								"1"
+							]
+						},
+						"description": "Get specific location by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Location",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"WS_01\",\n  \"name\": \"Xưởng A\",\n  \"description\": \"Xưởng sản xuất A\",\n  \"parentId\": null\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/locations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"locations"
+							]
+						},
+						"description": "Create new location. Set parentId for child locations."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Location",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Xưởng A - Updated\",\n  \"description\": \"Xưởng sản xuất A (cập nhật)\",\n  \"parentId\": null\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/locations/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"locations",
+								"1"
+							]
+						},
+						"description": "Update location by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Location",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/locations/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"locations",
+								"1"
+							]
+						},
+						"description": "Delete location by ID."
+					},
+					"response": []
+				}
+			],
+			"description": "Manage hierarchical locations for organizing scales."
+		},
+		{
+			"name": "Scales",
+			"item": [
+				{
+					"name": "Get All Scales",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scales",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales"
+							]
+						},
+						"description": "Get all scales. Optional filters: location_id, location_ids"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Scales By Location",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scales?location_id=1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales"
+							],
+							"query": [
+								{
+									"key": "location_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get scales filtered by single location ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Scales By Multiple Locations",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scales?location_ids=1,2,3",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales"
+							],
+							"query": [
+								{
+									"key": "location_ids",
+									"value": "1,2,3"
+								}
+							]
+						},
+						"description": "Get scales filtered by multiple location IDs."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Scale By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scales/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales",
+								"1"
+							]
+						},
+						"description": "Get specific scale by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Scale",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Cân 01\",\n  \"location_id\": 1,\n  \"model\": \"IND570\",\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/scales",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales"
+							]
+						},
+						"description": "Create new scale device."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Scale",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Cân 01 - Updated\",\n  \"location_id\": 1,\n  \"model\": \"IND570\",\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/scales/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales",
+								"1"
+							]
+						},
+						"description": "Update scale by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Scale",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scales/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales",
+								"1"
+							]
+						},
+						"description": "Delete scale by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Scale Configuration",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scales/1/config",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales",
+								"1",
+								"config"
+							]
+						},
+						"description": "Get technical configuration for a scale."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Scale Configuration",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"protocol\": \"MODBUS_TCP\",\n  \"poll_interval\": 1000,\n  \"conn_params\": {\n    \"ip\": \"192.168.1.10\",\n    \"port\": 502,\n    \"slave_id\": 1\n  },\n  \"data_1\": {\n    \"name\": \"Weight\",\n    \"start_registers\": 40001,\n    \"num_registers\": 2,\n    \"is_used\": true,\n    \"data_type\": \"FLOAT\",\n    \"unit\": \"kg\"\n  },\n  \"data_2\": {\n    \"name\": \"Status\",\n    \"start_registers\": 40003,\n    \"num_registers\": 1,\n    \"is_used\": true,\n    \"data_type\": \"INT\",\n    \"unit\": \"\"\n  },\n  \"data_3\": {\n    \"is_used\": false\n  },\n  \"data_4\": {\n    \"is_used\": false\n  },\n  \"data_5\": {\n    \"is_used\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/scales/1/config",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales",
+								"1",
+								"config"
+							]
+						},
+						"description": "Update technical configuration for a scale (protocol, registers, polling interval)."
+					},
+					"response": []
+				}
+			],
+			"description": "Manage scale devices and their technical configurations."
+		},
+		{
+			"name": "Scale Monitoring",
+			"item": [
+				{
+					"name": "Get All Scales Current States",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scales/current-states",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"scales",
+								"current-states"
+							]
+						},
+						"description": "Get real-time state of all scales with their configurations."
+					},
+					"response": []
+				}
+			],
+			"description": "Real-time monitoring of scale states."
+		},
+		{
+			"name": "Users (RBAC)",
+			"item": [
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users"
+							]
+						},
+						"description": "Get all users. Requires ADMIN or MANAGER role."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"1"
+							]
+						},
+						"description": "Get user by ID. Requires ADMIN or MANAGER role."
+					},
+					"response": []
+				},
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"newuser\",\n  \"password\": \"password123\",\n  \"full_name\": \"New User\",\n  \"email\": \"newuser@example.com\",\n  \"is_active\": true,\n  \"role_ids\": [2]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users"
+							]
+						},
+						"description": "Create new user. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"full_name\": \"Updated User\",\n  \"email\": \"updated@example.com\",\n  \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"1"
+							]
+						},
+						"description": "Update user information. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Roles",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role_ids\": [1, 2]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/1/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"1",
+								"roles"
+							]
+						},
+						"description": "Update user roles. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								"1"
+							]
+						},
+						"description": "Delete user. Requires ADMIN role."
+					},
+					"response": []
+				}
+			],
+			"description": "User management with role-based access control."
+		},
+		{
+			"name": "Roles (RBAC)",
+			"item": [
+				{
+					"name": "Get All Roles",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"roles"
+							]
+						},
+						"description": "Get all roles. Requires ADMIN or MANAGER role."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Role By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/roles/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"roles",
+								"1"
+							]
+						},
+						"description": "Get role by ID. Requires ADMIN or MANAGER role."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Role",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"OPERATOR\",\n  \"description\": \"Operator role\",\n  \"permission_ids\": [1, 2, 3]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"roles"
+							]
+						},
+						"description": "Create new role. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Role",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"OPERATOR\",\n  \"description\": \"Updated operator role\",\n  \"permission_ids\": [1, 2, 3, 4]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/roles/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"roles",
+								"1"
+							]
+						},
+						"description": "Update role. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Role",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/roles/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"roles",
+								"1"
+							]
+						},
+						"description": "Delete role. Requires ADMIN role."
+					},
+					"response": []
+				}
+			],
+			"description": "Role management for RBAC system."
+		},
+		{
+			"name": "Permissions (RBAC)",
+			"item": [
+				{
+					"name": "Get All Permissions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/permissions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"permissions"
+							]
+						},
+						"description": "Get all permissions. Requires ADMIN or MANAGER role."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Permission By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/permissions/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"permissions",
+								"1"
+							]
+						},
+						"description": "Get permission by ID. Requires ADMIN or MANAGER role."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Permission",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"READ_USER\",\n  \"description\": \"Permission to read user information\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/permissions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"permissions"
+							]
+						},
+						"description": "Create new permission. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Permission",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"READ_USER\",\n  \"description\": \"Updated: Permission to read user information\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/permissions/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"permissions",
+								"1"
+							]
+						},
+						"description": "Update permission. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Permission",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/permissions/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"permissions",
+								"1"
+							]
+						},
+						"description": "Delete permission. Requires ADMIN role."
+					},
+					"response": []
+				}
+			],
+			"description": "Permission management for RBAC system."
+		},
+		{
+			"name": "Reports",
+			"item": [
+				{
+					"name": "Export Report (Excel/Word/PDF)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"EXCEL\",\n  \"startTime\": \"2025-12-01T00:00:00+07:00\",\n  \"endTime\": \"2025-12-27T23:59:59+07:00\",\n  \"scaleIds\": [1, 2, 3],\n  \"locationIds\": [1]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/export?templateId=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"export"
+							],
+							"query": [
+								{
+									"key": "templateId",
+									"value": "",
+									"description": "Optional template ID for custom report format"
+								}
+							]
+						},
+						"description": "Export report in EXCEL, WORD, or PDF format. Optional templateId for custom templates.\n\n**Report Types:**\n- EXCEL: Excel spreadsheet (.xlsx)\n- WORD: Word document (.docx)\n- PDF: PDF document (.pdf)"
+					},
+					"response": []
+				},
+				{
+					"name": "Preview Report Data",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"EXCEL\",\n  \"startTime\": \"2025-12-01T00:00:00+07:00\",\n  \"endTime\": \"2025-12-27T23:59:59+07:00\",\n  \"scaleIds\": [1, 2, 3],\n  \"locationIds\": [1]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/preview",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"preview"
+							]
+						},
+						"description": "Preview report data before exporting. Validates request parameters."
+					},
+					"response": []
+				}
+			],
+			"description": "Export weighing reports in various formats (Excel, Word, PDF)."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

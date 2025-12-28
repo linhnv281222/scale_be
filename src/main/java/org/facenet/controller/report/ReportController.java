@@ -19,7 +19,7 @@ import java.io.IOException;
  * REST Controller for Report Export
  */
 @RestController
-@RequestMapping("/api/v1/reports")
+@RequestMapping("/reports")
 @RequiredArgsConstructor
 @Slf4j
 public class ReportController {
@@ -41,30 +41,45 @@ public class ReportController {
             log.info("Received report export request: type={}, templateId={}, startTime={}, endTime={}", 
                     request.getType(), templateId, request.getStartTime(), request.getEndTime());
 
+            // Validate export type
+            if (request.getType() == null) {
+                throw new IllegalArgumentException("Export type is required");
+            }
+
             // Export report with optional template
             byte[] reportData = reportExportService.exportReport(request, templateId);
+
+            if (reportData == null || reportData.length == 0) {
+                throw new RuntimeException("Failed to generate report: empty data");
+            }
 
             // Generate filename
             String filename = reportExportService.generateFilename(request);
 
             log.info("Report exported successfully: filename={}, size={} bytes", filename, reportData.length);
 
+            // Get content type
+            String contentType = request.getType().getContentType();
+            
             // Return file with appropriate headers
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                    .contentType(MediaType.parseMediaType(request.getType().getContentType()))
+                    .contentType(MediaType.parseMediaType(contentType))
                     .contentLength(reportData.length)
                     .body(reportData);
 
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid request parameters: {}", e.getMessage());
+            throw new RuntimeException("Invalid request: " + e.getMessage(), e);
         } catch (IOException e) {
-            log.error("Failed to export report: IO error", e);
-            throw new RuntimeException("Failed to generate report file: " + e.getMessage(), e);
+            log.error("Failed to export report: IO error - {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate report file. Please check server logs for details: " + e.getMessage(), e);
         } catch (DocumentException e) {
-            log.error("Failed to export report: Document error", e);
-            throw new RuntimeException("Failed to generate PDF document: " + e.getMessage(), e);
+            log.error("Failed to export report: Document error - {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate PDF document. Please check template configuration: " + e.getMessage(), e);
         } catch (Exception e) {
-            log.error("Failed to export report: Unexpected error", e);
-            throw new RuntimeException("Failed to export report: " + e.getMessage(), e);
+            log.error("Failed to export report: Unexpected error - {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to export report. Error: " + e.getMessage(), e);
         }
     }
 

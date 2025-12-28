@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
 import org.facenet.dto.report.ReportData;
+import org.facenet.entity.report.OrganizationSettings;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class WordExportService {
+
+    private final ReportTemplateService reportTemplateService;
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -132,7 +135,7 @@ public class WordExportService {
         document.write(outputStream);
         document.close();
 
-        // log.info("ENTERPRISE Word export completed. Size: {} bytes", outputStream.size());
+        log.info("ENTERPRISE Word export completed. Size: {} bytes", outputStream.size());
         return outputStream.toByteArray();
     }
 
@@ -140,11 +143,14 @@ public class WordExportService {
      * Create report header with title and code
      */
     private void createReportHeader(XWPFDocument document, ReportData reportData) {
+        // Get organization settings
+        OrganizationSettings org = reportTemplateService.getOrganizationSettings();
+        
         // Company name
         XWPFParagraph companyPara = document.createParagraph();
         companyPara.setAlignment(ParagraphAlignment.CENTER);
         XWPFRun companyRun = companyPara.createRun();
-        companyRun.setText("CÔNG TY SCALEHUB IoT");
+        companyRun.setText(org.getCompanyName() != null ? org.getCompanyName() : "SCALEHUB IoT");
         companyRun.setBold(true);
         companyRun.setFontFamily(FONT_FAMILY);
         companyRun.setFontSize(14);
@@ -253,17 +259,17 @@ public class WordExportService {
      * Create main data table with header, data rows, and zebra striping
      */
     private void createDataTable(XWPFDocument document, ReportData reportData) {
-        // Get column names
+        // Get column names from reportData (already loaded from scale_configs)
         String[] colNames = {
             "STT",
             "Mã trạm",
             "Tên trạm",
             "Vị trí",
-            reportData.getData1Name() != null ? reportData.getData1Name() : "Data 1",
-            reportData.getData2Name() != null ? reportData.getData2Name() : "Data 2",
-            reportData.getData3Name() != null ? reportData.getData3Name() : "Data 3",
-            reportData.getData4Name() != null ? reportData.getData4Name() : "Data 4",
-            reportData.getData5Name() != null ? reportData.getData5Name() : "Data 5",
+            reportData.getData1Name() != null ? reportData.getData1Name() : "Khối lượng (kg)",
+            reportData.getData2Name() != null ? reportData.getData2Name() : "Nhiệt độ (°C)",
+            reportData.getData3Name() != null ? reportData.getData3Name() : "Độ ẩm (%)",
+            reportData.getData4Name() != null ? reportData.getData4Name() : "Áp suất (hPa)",
+            reportData.getData5Name() != null ? reportData.getData5Name() : "Tốc độ (m/s)",
             "Số lần cân"
         };
         

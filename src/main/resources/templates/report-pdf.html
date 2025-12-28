@@ -209,11 +209,11 @@
                 <th style="width: 10%;">Mã trạm</th>
                 <th style="width: 15%;">Tên trạm</th>
                 <th style="width: 12%;">Vị trí</th>
-                <th style="width: 10%;">Data 1 (kg)</th>
-                <th style="width: 10%;">Data 2 (kg)</th>
-                <th style="width: 10%;">Data 3 (kg)</th>
-                <th style="width: 10%;">Data 4 (kg)</th>
-                <th style="width: 10%;">Data 5 (kg)</th>
+                <th style="width: 10%;" th:text="${report.data1Name != null ? report.data1Name : 'Khối lượng (kg)'}">Khối lượng (kg)</th>
+                <th style="width: 10%;" th:text="${report.data2Name != null ? report.data2Name : 'Nhiệt độ (°C)'}">Nhiệt độ (°C)</th>
+                <th style="width: 10%;" th:text="${report.data3Name != null ? report.data3Name : 'Độ ẩm (%)'}">Độ ẩm (%)</th>
+                <th style="width: 10%;" th:text="${report.data4Name != null ? report.data4Name : 'Áp suất (hPa)'}">Áp suất (hPa)</th>
+                <th style="width: 10%;" th:text="${report.data5Name != null ? report.data5Name : 'Tốc độ (m/s)'}">Tốc độ (m/s)</th>
                 <th style="width: 8%;">Số lần cân</th>
             </tr>
         </thead>
@@ -244,28 +244,28 @@
                 <td class="number" th:text="${report.summary.totalRecords}">1,250</td>
             </tr>
             <tr>
-                <td>Tổng Data 1:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1GrandTotal)} + ' kg'">12,505.00 kg</td>
-                <td>Trung bình Data 1:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Average)} + ' kg'">1,250.50 kg</td>
+                <td th:text="'Tổng ' + ${report.data1Name != null ? report.data1Name : 'Khối lượng'} + ':'">Tổng Khối lượng:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1GrandTotal)}">12,505.00</td>
+                <td th:text="'Trung bình ' + ${report.data1Name != null ? report.data1Name : 'Khối lượng'} + ':'">Trung bình Khối lượng:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Average)}">1,250.50</td>
             </tr>
             <tr>
-                <td>Tổng Data 2:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2GrandTotal)} + ' kg'">9,800.00 kg</td>
-                <td>Trung bình Data 2:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Average)} + ' kg'">980.00 kg</td>
+                <td th:text="'Tổng ' + ${report.data2Name != null ? report.data2Name : 'Nhiệt độ'} + ':'">Tổng Nhiệt độ:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2GrandTotal)}">9,800.00</td>
+                <td th:text="'Trung bình ' + ${report.data2Name != null ? report.data2Name : 'Nhiệt độ'} + ':'">Trung bình Nhiệt độ:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Average)}">980.00</td>
             </tr>
             <tr>
-                <td>Tổng Data 3:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3GrandTotal)} + ' kg'">7,502.50 kg</td>
-                <td>Trung bình Data 3:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3Average)} + ' kg'">750.25 kg</td>
+                <td th:text="'Tổng ' + ${report.data3Name != null ? report.data3Name : 'Độ ẩm'} + ':'">Tổng Độ ẩm:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3GrandTotal)}">7,502.50</td>
+                <td th:text="'Trung bình ' + ${report.data3Name != null ? report.data3Name : 'Độ ẩm'} + ':'">Trung bình Độ ẩm:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3Average)}">750.25</td>
             </tr>
             <tr>
-                <td>Giá trị lớn nhất Data 1:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Max)} + ' kg'">2,500.00 kg</td>
-                <td>Giá trị lớn nhất Data 2:</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Max)} + ' kg'">1,800.00 kg</td>
+                <td th:text="'Giá trị lớn nhất ' + ${report.data1Name != null ? report.data1Name : 'Khối lượng'} + ':'">Giá trị lớn nhất Khối lượng:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Max)}">2,500.00</td>
+                <td th:text="'Giá trị lớn nhất ' + ${report.data2Name != null ? report.data2Name : 'Nhiệt độ'} + ':'">Giá trị lớn nhất Nhiệt độ:</td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Max)}">1,800.00</td>
             </tr>
         </table>
     </div>

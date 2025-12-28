@@ -53,6 +53,9 @@ public class UserDto {
         @Size(max = 100, message = "Full name must not exceed 100 characters")
         private String fullName;
 
+        @Size(min = 8, message = "Password must be at least 8 characters")
+        private String password;
+
         private Short status;
 
         private List<Integer> roleIds;
