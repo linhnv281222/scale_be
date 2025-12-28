@@ -518,15 +518,15 @@ public class WordExportService {
         setSignatureNameCell(sigTable.getRow(3).getCell(2), "");
         
         // Footer note
-        XWPFParagraph footerPara = document.createParagraph();
-        footerPara.setAlignment(ParagraphAlignment.CENTER);
-        footerPara.setSpacingBefore(600);
-        XWPFRun footerRun = footerPara.createRun();
-        footerRun.setText("--- Báo cáo nội bộ - ScaleHub IoT ---");
-        footerRun.setItalic(true);
-        footerRun.setFontFamily(FONT_FAMILY);
-        footerRun.setFontSize(9);
-        footerRun.setColor("808080");
+        // XWPFParagraph footerPara = document.createParagraph();
+        // footerPara.setAlignment(ParagraphAlignment.CENTER);
+        // footerPara.setSpacingBefore(600);
+        // XWPFRun footerRun = footerPara.createRun();
+        // footerRun.setText("--- Báo cáo nội bộ - ScaleHub IoT ---");
+        // footerRun.setItalic(true);
+        // footerRun.setFontFamily(FONT_FAMILY);
+        // footerRun.setFontSize(9);
+        // footerRun.setColor("808080");
     }
     
     private void setSignatureCell(XWPFTableCell cell, String text) {

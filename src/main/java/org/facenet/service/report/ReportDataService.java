@@ -120,6 +120,7 @@ public class ReportDataService {
         for (Map.Entry<Long, List<WeighingLog>> entry : logsByScale.entrySet()) {
             Long scaleId = entry.getKey();
             List<WeighingLog> scaleLogs = entry.getValue();
+
             Scale scale = scaleMap.get(scaleId);
 
             if (scale == null) {
@@ -229,7 +230,7 @@ public class ReportDataService {
         double sum = logs.stream()
                 .map(dataExtractor)
                 .peek(value -> {
-                    if (log.isDebugEnabled()) {
+                    if (log.isDebugEnabled() || true) {
                         log.debug("Raw data value from weighing_log: '{}'", value);
                     }
                 })

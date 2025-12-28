@@ -2,6 +2,7 @@ package org.facenet.service.scale.engine;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
@@ -9,6 +10,7 @@ import org.facenet.event.MeasurementEvent;
 import org.facenet.repository.scale.ScaleRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -32,6 +34,7 @@ public class EngineManager {
     private final ScaleRepository scaleRepository;
     private final BlockingQueue<MeasurementEvent> queue;
     private final ExecutorService deviceEngineExecutor;
+    private final EntityManager entityManager;
     
     // Map lưu trữ các engine đang chạy: scaleId -> engine
     private final Map<Long, ScaleEngine> runningEngines = new ConcurrentHashMap<>();
@@ -39,10 +42,12 @@ public class EngineManager {
     public EngineManager(
             ScaleRepository scaleRepository,
             @Qualifier("measurementEventQueue") BlockingQueue<MeasurementEvent> queue,
-            @Qualifier("deviceEngineExecutor") ExecutorService deviceEngineExecutor) {
+            @Qualifier("deviceEngineExecutor") ExecutorService deviceEngineExecutor,
+            EntityManager entityManager) {
         this.scaleRepository = scaleRepository;
         this.queue = queue;
         this.deviceEngineExecutor = deviceEngineExecutor;
+        this.entityManager = entityManager;
     }
     
     /**
@@ -141,14 +146,26 @@ public class EngineManager {
     /**
      * Restart engine khi cấu hình thay đổi
      */
+    @Transactional
     public void restartEngine(Long scaleId) {
         log.info("[EngineManager] Restarting engine for scale {}", scaleId);
         
         // Dừng engine cũ
         stopEngine(scaleId);
         
+        // CRITICAL FIX: Clear persistence context để tránh lấy cached entity cũ
+        // JPA EntityManager có thể cache entity, dẫn đến việc không load config mới từ DB
+        entityManager.clear();
+        log.debug("[EngineManager] Cleared EntityManager persistence context before reloading config");
+        
         // Load lại config và start engine mới
         scaleRepository.findByIdWithDetails(scaleId).ifPresent(scale -> {
+            ScaleConfig config = scale.getConfig();
+            if (config != null) {
+                log.info("[EngineManager] Loaded fresh config from DB - scaleId={}, protocol={}, pollInterval={}ms",
+                        scaleId, config.getProtocol(), config.getPollInterval());
+            }
+            
             if (scale.getIsActive()) {
                 startEngine(scale);
             } else {

@@ -48,7 +48,8 @@ public class ModbusTcpEngine implements ScaleEngine {
     @Override
     public void run() {
         running = true;
-        log.info("[Engine {}] Modbus TCP Engine started", config.getScaleId());
+        log.info("[Engine {}] Modbus TCP Engine started with pollInterval={}ms", 
+                config.getScaleId(), config.getPollInterval());
         
         TcpParameters tcpParameters = new TcpParameters();
         
@@ -129,7 +130,9 @@ public class ModbusTcpEngine implements ScaleEngine {
                 }
                 
                 // Nghỉ theo poll_interval
-                Thread.sleep(config.getPollInterval());
+                int pollInterval = config.getPollInterval();
+                log.trace("[Engine {}] Sleeping for {}ms (pollInterval)", config.getScaleId(), pollInterval);
+                Thread.sleep(pollInterval);
             }
             
         } catch (Exception e) {

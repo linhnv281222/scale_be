@@ -3,6 +3,7 @@ package org.facenet.service.report;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.dto.report.ReportData;
+import org.facenet.dto.report.ReportExportRequest;
 import org.facenet.entity.report.*;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
@@ -92,11 +93,13 @@ public class ReportTemplateService {
     @Transactional(readOnly = true)
     public ReportData buildReportData(
             ReportTemplate template,
-            OffsetDateTime startTime,
-            OffsetDateTime endTime,
-            List<Long> scaleIds,
-            String preparedBy
+            ReportExportRequest request
     ) {
+        OffsetDateTime startTime = request.getStartTime();
+        OffsetDateTime endTime = request.getEndTime();
+        List<Long> scaleIds = request.getScaleIds();
+        String preparedBy = request.getPreparedBy();
+        
         log.info("Building report data with template: {} for period {} to {}", 
                 template.getCode(), startTime, endTime);
         
@@ -151,33 +154,76 @@ public class ReportTemplateService {
         log.info("Active data fields: data_1={}, data_2={}, data_3={}, data_4={}, data_5={}", 
                 hasData[0], hasData[1], hasData[2], hasData[3], hasData[4]);
 
-        // Group data by scale
-        Map<Long, List<WeighingLog>> logsByScale = logs.stream()
-                .collect(Collectors.groupingBy(WeighingLog::getScaleId));
-
-        // Fetch scale information
-        List<Long> uniqueScaleIds = new ArrayList<>(logsByScale.keySet());
+        // Fetch scale information first
+        List<Long> uniqueScaleIds = logs.stream()
+                .map(WeighingLog::getScaleId)
+                .distinct()
+                .collect(Collectors.toList());
         List<Scale> scales = scaleRepository.findAllById(uniqueScaleIds);
         Map<Long, Scale> scaleMap = scales.stream()
                 .collect(Collectors.toMap(Scale::getId, s -> s));
 
-        // Build report rows based on template columns
+        // Build report rows - group by time interval if specified
         List<ReportData.ReportRow> rows = new ArrayList<>();
         int rowNumber = 1;
 
-        for (Map.Entry<Long, List<WeighingLog>> entry : logsByScale.entrySet()) {
-            Long scaleId = entry.getKey();
-            List<WeighingLog> scaleLogs = entry.getValue();
-            Scale scale = scaleMap.get(scaleId);
-
-            if (scale == null) {
-                log.warn("Scale {} not found, skipping", scaleId);
-                continue;
+        if (request.getTimeInterval() != null) {
+            // Group by time interval AND scale
+            log.info("Grouping data by time interval: {}", request.getTimeInterval());
+            
+            // Create time-scale groups
+            Map<String, Map<Long, List<WeighingLog>>> logsByPeriodAndScale = new TreeMap<>();
+            
+            for (WeighingLog logEntry : logs) {
+                String period = truncateToInterval(logEntry.getCreatedAt(), request.getTimeInterval());
+                logsByPeriodAndScale
+                        .computeIfAbsent(period, k -> new HashMap<>())
+                        .computeIfAbsent(logEntry.getScaleId(), k -> new ArrayList<>())
+                        .add(logEntry);
             }
+            
+            log.info("Created {} time periods with data", logsByPeriodAndScale.size());
+            
+            // Generate rows for each period-scale combination
+            for (Map.Entry<String, Map<Long, List<WeighingLog>>> periodEntry : logsByPeriodAndScale.entrySet()) {
+                String period = periodEntry.getKey();
+                
+                for (Map.Entry<Long, List<WeighingLog>> scaleEntry : periodEntry.getValue().entrySet()) {
+                    Long scaleId = scaleEntry.getKey();
+                    List<WeighingLog> periodLogs = scaleEntry.getValue();
+                    Scale scale = scaleMap.get(scaleId);
+                    
+                    if (scale == null) {
+                        log.warn("Scale {} not found, skipping", scaleId);
+                        continue;
+                    }
+                    
+                    ReportData.ReportRow row = buildRowFromTemplate(
+                            template, scale, periodLogs, rowNumber++, period);
+                    rows.add(row);
+                }
+            }
+        } else {
+            // No time interval - aggregate all data per scale (original behavior)
+            log.info("No time interval specified, aggregating all data per scale");
+            
+            Map<Long, List<WeighingLog>> logsByScale = logs.stream()
+                    .collect(Collectors.groupingBy(WeighingLog::getScaleId));
+            
+            for (Map.Entry<Long, List<WeighingLog>> entry : logsByScale.entrySet()) {
+                Long scaleId = entry.getKey();
+                List<WeighingLog> scaleLogs = entry.getValue();
+                Scale scale = scaleMap.get(scaleId);
 
-            ReportData.ReportRow row = buildRowFromTemplate(
-                    template, scale, scaleLogs, rowNumber++);
-            rows.add(row);
+                if (scale == null) {
+                    log.warn("Scale {} not found, skipping", scaleId);
+                    continue;
+                }
+
+                ReportData.ReportRow row = buildRowFromTemplate(
+                        template, scale, scaleLogs, rowNumber++, null);
+                rows.add(row);
+            }
         }
 
         // Sort rows by scale ID
@@ -264,13 +310,58 @@ public class ReportTemplateService {
     }
 
     /**
+     * Truncate timestamp to time interval for grouping
+     */
+    private String truncateToInterval(OffsetDateTime timestamp, ReportExportRequest.TimeInterval interval) {
+        if (timestamp == null || interval == null) {
+            return "Unknown";
+        }
+        
+        DateTimeFormatter formatter;
+        OffsetDateTime truncated;
+        
+        switch (interval) {
+            case HOUR -> {
+                truncated = timestamp.truncatedTo(java.time.temporal.ChronoUnit.HOURS);
+                formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:00");
+            }
+            case DAY -> {
+                truncated = timestamp.truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+                formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            }
+            case WEEK -> {
+                // Week: Monday 00:00:00
+                truncated = timestamp.with(java.time.DayOfWeek.MONDAY)
+                        .truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+                formatter = DateTimeFormatter.ofPattern("yyyy-'W'ww");
+            }
+            case MONTH -> {
+                truncated = timestamp.withDayOfMonth(1)
+                        .truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+                formatter = DateTimeFormatter.ofPattern("yyyy-MM");
+            }
+            case YEAR -> {
+                truncated = timestamp.withDayOfYear(1)
+                        .truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+                formatter = DateTimeFormatter.ofPattern("yyyy");
+            }
+            default -> {
+                return timestamp.toString();
+            }
+        }
+        
+        return truncated.format(formatter);
+    }
+
+    /**
      * Build row from template columns
      */
     private ReportData.ReportRow buildRowFromTemplate(
             ReportTemplate template,
             Scale scale,
             List<WeighingLog> logs,
-            int rowNumber
+            int rowNumber,
+            String period
     ) {
         ReportData.ReportRow.ReportRowBuilder builder = ReportData.ReportRow.builder()
                 .rowNumber(rowNumber)
@@ -279,6 +370,7 @@ public class ReportTemplateService {
                 .scaleName(scale.getName())
                 .location(scale.getLocation() != null ? scale.getLocation().getName() : "N/A")
                 .recordCount(logs.size())
+                .period(period)  // Add time period
                 .lastTime(logs.stream()
                         .map(WeighingLog::getLastTime)
                         .max(OffsetDateTime::compareTo)
@@ -288,7 +380,10 @@ public class ReportTemplateService {
         for (ReportColumn column : template.getColumns()) {
             if (column.getDataSource() == ReportColumn.DataSource.WEIGHING_DATA) {
                 Double value = calculateAggregation(logs, column);
-                
+                if (column.getDataField()== null) {
+                    log.warn("Skip WEIGHING_DATA column {} due to null dataField", column.getColumnKey());
+                    continue;
+                }
                 // Map to appropriate field
                 switch (column.getDataField()) {
                     case "data_1" -> builder.data1Total(value);
@@ -312,6 +407,7 @@ public class ReportTemplateService {
         if (!logs.isEmpty()) {
             for (int i = 0; i < Math.min(3, logs.size()); i++) {
                 WeighingLog logEntry = logs.get(i);
+                if (field == null) continue;
                 String rawValue = switch (field) {
                     case "data_1" -> logEntry.getData1();
                     case "data_2" -> logEntry.getData2();
@@ -355,6 +451,11 @@ public class ReportTemplateService {
      * Extract value from weighing log by field name
      */
     private Double extractValue(WeighingLog weighingLog, String field) {
+        if (field == null) {
+            log.warn("Field parameter is null in extractValue");
+            return null;
+        }
+        
         String rawValue = switch (field) {
             case "data_1" -> weighingLog.getData1();
             case "data_2" -> weighingLog.getData2();

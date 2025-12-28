@@ -51,10 +51,7 @@ public class ReportExportService {
         // Fetch and process data using template
         ReportData reportData = reportTemplateService.buildReportData(
                 template,
-                request.getStartTime(),
-                request.getEndTime(),
-                request.getScaleIds(),
-                request.getPreparedBy()
+                request
         );
 
         // Export based on type

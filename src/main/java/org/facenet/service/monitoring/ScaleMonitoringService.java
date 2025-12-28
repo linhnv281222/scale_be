@@ -53,7 +53,7 @@ public class ScaleMonitoringService {
     /**
      * Broadcast toàn bộ dữ liệu của tất cả các cân mỗi 2 giây
      */
-    @Scheduled(fixedRate = 2000)
+    @Scheduled(fixedRate = 180000)
     public void broadcastAllScalesData() {
         try {
             AllScalesDataEvent allData = buildAllScalesData();

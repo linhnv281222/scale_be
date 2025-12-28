@@ -45,6 +45,7 @@ public class ReportData {
         private String scaleCode;
         private String scaleName;
         private String location;
+        private String period;  // Time period for time-based grouping (e.g., "2025-12-20 14:00", "2025-12-20")
         private Double data1Total;
         private Double data2Total;
         private Double data3Total;

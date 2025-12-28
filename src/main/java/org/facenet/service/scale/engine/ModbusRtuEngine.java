@@ -51,7 +51,8 @@ public class ModbusRtuEngine implements ScaleEngine {
     @Override
     public void run() {
         running = true;
-        log.info("[Engine {}] Modbus RTU Engine started", config.getScaleId());
+        log.info("[Engine {}] Modbus RTU Engine started with pollInterval={}ms", 
+                config.getScaleId(), config.getPollInterval());
         
         SerialParameters serialParameters = new SerialParameters();
         
@@ -137,7 +138,9 @@ public class ModbusRtuEngine implements ScaleEngine {
                 }
                 
                 // Nghỉ theo poll_interval
-                Thread.sleep(config.getPollInterval());
+                int pollInterval = config.getPollInterval();
+                log.trace("[Engine {}] Sleeping for {}ms (pollInterval)", config.getScaleId(), pollInterval);
+                Thread.sleep(pollInterval);
             }
             
         } catch (Exception e) {
