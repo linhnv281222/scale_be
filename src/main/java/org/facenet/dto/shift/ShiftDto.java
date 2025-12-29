@@ -1,7 +1,9 @@
 package org.facenet.dto.shift;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -18,6 +20,7 @@ public class ShiftDto {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @Schema(name = "ShiftRequest", description = "Request DTO for creating a new shift")
     public static class Request {
 
         @NotBlank(message = "Shift code is required")
@@ -28,9 +31,13 @@ public class ShiftDto {
         private String name;
 
         @JsonProperty("start_time")
+        @JsonFormat(pattern = "HH:mm:ss")
+        @Schema(description = "Start time in format HH:mm:ss", example = "08:00:00")
         private LocalTime startTime;
 
         @JsonProperty("end_time")
+        @JsonFormat(pattern = "HH:mm:ss")
+        @Schema(description = "End time in format HH:mm:ss", example = "16:00:00")
         private LocalTime endTime;
 
         @JsonProperty("is_active")
@@ -42,15 +49,20 @@ public class ShiftDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "ShiftUpdateRequest", description = "Request DTO for updating a shift")
     public static class UpdateRequest {
 
         @Size(max = 100, message = "Name must not exceed 100 characters")
         private String name;
 
         @JsonProperty("start_time")
+        @JsonFormat(pattern = "HH:mm:ss")
+        @Schema(description = "Start time in format HH:mm:ss", example = "08:00:00")
         private LocalTime startTime;
 
         @JsonProperty("end_time")
+        @JsonFormat(pattern = "HH:mm:ss")
+        @Schema(description = "End time in format HH:mm:ss", example = "16:00:00")
         private LocalTime endTime;
 
         @JsonProperty("is_active")
@@ -61,6 +73,7 @@ public class ShiftDto {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @Schema(name = "ShiftResponse", description = "Response DTO for shift")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Response {
 
@@ -71,9 +84,11 @@ public class ShiftDto {
         private String name;
 
         @JsonProperty("start_time")
+        @JsonFormat(pattern = "HH:mm:ss")
         private LocalTime startTime;
 
         @JsonProperty("end_time")
+        @JsonFormat(pattern = "HH:mm:ss")
         private LocalTime endTime;
 
         @JsonProperty("is_active")
