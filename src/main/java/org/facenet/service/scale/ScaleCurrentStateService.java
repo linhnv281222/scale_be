@@ -2,11 +2,15 @@ package org.facenet.service.scale;
 
 import lombok.RequiredArgsConstructor;
 import org.facenet.dto.scale.ScaleCurrentStateDto;
+import org.facenet.dto.scale.ScaleShiftDto;
+import org.facenet.entity.shift.Shift;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.entity.scale.ScaleCurrentState;
 import org.facenet.repository.scale.ScaleCurrentStateRepository;
 import org.facenet.repository.scale.ScaleRepository;
+import org.facenet.repository.shift.ShiftRepository;
+import org.facenet.common.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +27,7 @@ public class ScaleCurrentStateService {
 
     private final ScaleCurrentStateRepository scaleCurrentStateRepository;
     private final ScaleRepository scaleRepository;
+    private final ShiftRepository shiftRepository;
 
     /**
      * Get all scales' current states with config data names
@@ -48,6 +53,10 @@ public class ScaleCurrentStateService {
             ScaleCurrentState state = currentState.get();
             builder.status(state.getStatus())
                    .lastTime(state.getLastTime());
+
+            if (state.getShift() != null) {
+                builder.shiftId(state.getShift().getId());
+            }
 
             // Build data values map with names from config
             Map<String, ScaleCurrentStateDto.DataFieldValue> dataValues = new LinkedHashMap<>();
@@ -108,5 +117,29 @@ public class ScaleCurrentStateService {
         }
 
         return builder.build();
+    }
+
+    @Transactional
+    public void setScaleCurrentShift(Long scaleId, ScaleShiftDto.Request request) {
+        Scale scale = scaleRepository.findById(scaleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", scaleId));
+
+        Shift shift = null;
+        if (request != null && request.getShiftId() != null) {
+            shift = shiftRepository.findById(request.getShiftId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", request.getShiftId()));
+        }
+
+        ScaleCurrentState currentState = scaleCurrentStateRepository.findById(scaleId)
+                .orElseGet(() -> {
+                    ScaleCurrentState newState = new ScaleCurrentState();
+                    newState.setScale(scale);
+                    // lastTime is required by schema; set to now for brand-new state row
+                    newState.setLastTime(java.time.OffsetDateTime.now());
+                    return newState;
+                });
+
+        currentState.setShift(shift);
+        scaleCurrentStateRepository.save(currentState);
     }
 }

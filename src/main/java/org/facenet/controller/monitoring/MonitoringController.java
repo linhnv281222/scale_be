@@ -14,8 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Controller for monitoring scale status
  */
-@RestController
-@RequestMapping("/monitoring")
+// Disabled: monitoring endpoints removed per requirement
 @RequiredArgsConstructor
 public class MonitoringController {
 

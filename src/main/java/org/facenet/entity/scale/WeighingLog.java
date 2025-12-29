@@ -2,6 +2,7 @@ package org.facenet.entity.scale;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.facenet.entity.shift.Shift;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -43,6 +44,10 @@ public class WeighingLog {
 
     @Column(name = "last_time", nullable = false)
     private OffsetDateTime lastTime;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shift_id")
+    private Shift shift;
 
     @Column(name = "data_1")
     private String data1;

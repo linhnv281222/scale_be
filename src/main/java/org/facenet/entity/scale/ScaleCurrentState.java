@@ -3,6 +3,7 @@ package org.facenet.entity.scale;
 import jakarta.persistence.*;
 import lombok.*;
 import org.facenet.common.audit.Auditable;
+import org.facenet.entity.shift.Shift;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -47,6 +48,10 @@ public class ScaleCurrentState extends Auditable {
 
     @Column(name = "status", length = 20)
     private String status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shift_id")
+    private Shift shift;
 
     @Column(name = "last_time", nullable = false)
     private OffsetDateTime lastTime;

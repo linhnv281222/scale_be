@@ -12,8 +12,7 @@ import java.util.Map;
 /**
  * REST controller for monitoring persistence module metrics
  */
-@RestController
-@RequestMapping("/monitoring/persistence")
+// Disabled: persistence monitoring endpoints removed per requirement
 @RequiredArgsConstructor
 public class PersistenceMonitoringController {
 

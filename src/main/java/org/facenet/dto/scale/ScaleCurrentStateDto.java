@@ -23,6 +23,7 @@ public class ScaleCurrentStateDto {
 
     private Long scaleId;
     private String scaleName;
+    private Long shiftId;
     private String status;
     private OffsetDateTime lastTime;
 

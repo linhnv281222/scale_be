@@ -18,8 +18,7 @@ import java.io.IOException;
 /**
  * REST Controller for Report Export
  */
-@RestController
-@RequestMapping("/reports")
+// Disabled: legacy report endpoints removed per requirement
 @RequiredArgsConstructor
 @Slf4j
 public class ReportController {

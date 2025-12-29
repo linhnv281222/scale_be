@@ -40,10 +40,10 @@ public class PersistenceServiceImpl implements PersistenceService {
         Long scaleId = event.getScaleId();
         try {
             // Update current state (upsert)
-            updateCurrentState(event);
+            ScaleCurrentState currentState = updateCurrentState(event);
 
             // Insert historical log
-            insertWeighingLog(event);
+            insertWeighingLog(event, currentState);
 
             log.debug("[PERSISTENCE] Successfully persisted measurement for scale {}", scaleId);
         } catch (Exception e) {
@@ -58,7 +58,7 @@ public class PersistenceServiceImpl implements PersistenceService {
     /**
      * Update or insert current state for the scale
      */
-    private void updateCurrentState(MeasurementEvent event) {
+    private ScaleCurrentState updateCurrentState(MeasurementEvent event) {
         if (event.getScaleId() == null) {
             throw new IllegalArgumentException("MeasurementEvent.scaleId must not be null");
         }
@@ -90,13 +90,13 @@ public class PersistenceServiceImpl implements PersistenceService {
         currentState.setCreatedBy("engine_modbus");
         currentState.setUpdatedBy("engine_modbus");
 
-        currentStateRepository.save(currentState);
+        return currentStateRepository.save(currentState);
     }
 
     /**
      * Insert new weighing log entry
      */
-    private void insertWeighingLog(MeasurementEvent event) {
+    private void insertWeighingLog(MeasurementEvent event, ScaleCurrentState currentState) {
         if (event.getScaleId() == null) {
             throw new IllegalArgumentException("MeasurementEvent.scaleId must not be null");
         }
@@ -107,6 +107,7 @@ public class PersistenceServiceImpl implements PersistenceService {
                 .scaleId(event.getScaleId())
                 .createdAt(OffsetDateTime.now()) // Set createdAt explicitly for composite key
                 .lastTime(lastTime.toOffsetDateTime())
+            .shift(currentState != null ? currentState.getShift() : null)
                 .data1(event.getData1() != null ? event.getData1().getValue() : null)
                 .data2(event.getData2() != null ? event.getData2().getValue() : null)
                 .data3(event.getData3() != null ? event.getData3().getValue() : null)

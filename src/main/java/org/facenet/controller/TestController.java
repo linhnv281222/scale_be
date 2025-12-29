@@ -11,8 +11,7 @@ import java.time.ZonedDateTime;
 /**
  * Test controller để test WebSocket broadcasting
  */
-@RestController
-@RequestMapping("/api/v1/test")
+// Disabled: test-only endpoints removed per requirement
 @RequiredArgsConstructor
 public class TestController {
 

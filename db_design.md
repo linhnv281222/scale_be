@@ -53,6 +53,9 @@ erDiagram
     SCALES ||--|| SCALE_CURRENT_STATES : has
     SCALES ||--o{ WEIGHING_LOGS : produces
     SCALES ||--o{ SCALE_DAILY_REPORTS : aggregates
+
+    SHIFTS ||--o{ SCALE_CURRENT_STATES : tagged_by
+    SHIFTS ||--o{ WEIGHING_LOGS : tagged_by
 ```
 
 ---
@@ -229,6 +232,7 @@ CREATE TABLE scale_current_states (
     data_4 varchar(256),
     data_5 varchar(256),
     status VARCHAR(20),
+    shift_id BIGINT REFERENCES shifts(id),
     last_time TIMESTAMPTZ NOT NULL,
 );
 ```
@@ -248,6 +252,8 @@ CREATE TABLE weighing_logs (
     updated_by varchar(256),
     last_time TIMESTAMPTZ NOT NULL,
 
+    shift_id BIGINT REFERENCES shifts(id),
+
     data_1 varchar(256),
     data_2 varchar(256),
     data_3 varchar(256),
@@ -255,6 +261,27 @@ CREATE TABLE weighing_logs (
     data_5 varchar(256),
     PRIMARY KEY (scale_id, created_at)
 ) PARTITION BY RANGE (created_at);
+
+---
+
+## F. Shift Management
+
+### `shifts`
+
+```sql
+CREATE TABLE shifts (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by varchar(256),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by varchar(256),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(100),
+    start_time TIME,
+    end_time TIME,
+    is_active BOOLEAN DEFAULT true
+);
+```
 ```
 
 Index:
