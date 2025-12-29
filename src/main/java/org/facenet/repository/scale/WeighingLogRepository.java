@@ -3,8 +3,11 @@ package org.facenet.repository.scale;
 import org.facenet.entity.scale.WeighingLog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -18,8 +21,15 @@ import java.util.List;
 public interface WeighingLogRepository extends JpaRepository<WeighingLog, WeighingLog.WeighingLogId> {
 
     /**
+     * Specification-based querying (preferred for optional filters).
+     */
+       @EntityGraph(attributePaths = {"scale", "scale.config"})
+    Page<WeighingLog> findAll(Specification<WeighingLog> spec, Pageable pageable);
+
+    /**
      * Find logs by scale within time range
      */
+    @EntityGraph(attributePaths = {"scale", "scale.config"})
     @Query("SELECT w FROM WeighingLog w WHERE w.scaleId = :scaleId " +
            "AND w.createdAt BETWEEN :startTime AND :endTime " +
            "ORDER BY w.createdAt DESC")

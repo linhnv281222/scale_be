@@ -6,12 +6,17 @@ import org.facenet.common.response.ApiResponse;
 import org.facenet.common.response.ErrorResponse;
 import org.facenet.dto.scale.ScaleConfigDto;
 import org.facenet.dto.scale.ScaleDto;
+import org.facenet.dto.scale.WeighingDataDto;
+import org.facenet.service.scale.WeighingLogService;
 import org.facenet.service.scale.ScaleService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @RestController
@@ -20,6 +25,7 @@ import java.util.List;
 public class ScaleController {
 
     private final ScaleService scaleService;
+    private final WeighingLogService weighingLogService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
@@ -87,5 +93,35 @@ public class ScaleController {
             @Valid @RequestBody ScaleConfigDto.Request request) {
         ScaleConfigDto.Response config = scaleService.updateScaleConfig(id, request);
         return ResponseEntity.ok(ApiResponse.success(config));
+    }
+
+    /**
+     * Get weighing log history with pagination and optional filters.
+     * Query params:
+     * - scaleId: filter by scale
+     * - startTime, endTime: filter by time range (ISO-8601)
+     * - page, size: pagination
+     */
+    @GetMapping("/history")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
+    public ResponseEntity<ApiResponse<Page<WeighingDataDto.LogResponse>>> getScaleHistory(
+            @RequestParam(name = "scaleId", required = false) Long scaleId,
+            @RequestParam(name = "startTime", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
+            @RequestParam(name = "endTime", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
+    ) {
+        WeighingDataDto.LogQueryRequest request = WeighingDataDto.LogQueryRequest.builder()
+                .scaleId(scaleId)
+                .startTime(startTime)
+                .endTime(endTime)
+                .page(page)
+                .size(size)
+                .build();
+
+        Page<WeighingDataDto.LogResponse> history = weighingLogService.getHistory(request);
+        return ResponseEntity.ok(ApiResponse.success(history));
     }
 }

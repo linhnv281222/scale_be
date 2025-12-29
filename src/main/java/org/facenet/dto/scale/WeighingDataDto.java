@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Map;
 
 /**
  * DTOs for WeighingLog and Report operations
@@ -32,6 +33,22 @@ public class WeighingDataDto {
         private String data3;
         private String data4;
         private String data5;
+
+        /**
+         * Map data field to {value, name, isUsed} derived from scale_config.
+         * Keys are: data_1 .. data_5
+         */
+        private Map<String, DataFieldValue> dataValues;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DataFieldValue {
+        private String value;
+        private String name;
+        private boolean isUsed;
     }
 
     /**
