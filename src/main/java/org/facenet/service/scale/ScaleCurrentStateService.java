@@ -33,14 +33,42 @@ public class ScaleCurrentStateService {
      * Get all scales' current states with config data names
      */
     public List<ScaleCurrentStateDto> getAllScalesWithConfig() {
-        List<Scale> allScales = scaleRepository.findAll();
-        
-        return allScales.stream()
-                .map(this::convertToDto)
+        return getScalesWithConfig(null, null, null);
+    }
+
+    /**
+     * Get scales' current states with optional filters.
+     *
+     * @param scaleId   optional single scale id filter
+     * @param scaleIds  optional multiple scale ids filter (takes precedence over scaleId)
+     * @param status    optional scale status filter (matches scale_current_states.status, case-insensitive, trimmed)
+     */
+    public List<ScaleCurrentStateDto> getScalesWithConfig(Long scaleId, List<Long> scaleIds, String status) {
+        List<Scale> scales;
+
+        if (scaleIds != null && !scaleIds.isEmpty()) {
+            scales = scaleRepository.findAllById(scaleIds);
+        } else if (scaleId != null) {
+            scales = scaleRepository.findById(scaleId)
+                    .map(List::of)
+                    .orElseGet(List::of);
+        } else {
+            scales = scaleRepository.findAll();
+        }
+
+        final String normalizedStatus = normalizeFilterValue(status);
+
+        return scales.stream()
+            .map(scale -> convertToDto(scale, normalizedStatus))
+            .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
     private ScaleCurrentStateDto convertToDto(Scale scale) {
+        return convertToDto(scale, null);
+    }
+
+    private ScaleCurrentStateDto convertToDto(Scale scale, String normalizedStatus) {
         ScaleCurrentStateDto.ScaleCurrentStateDtoBuilder builder = ScaleCurrentStateDto.builder();
         
         builder.scaleId(scale.getId())
@@ -51,6 +79,11 @@ public class ScaleCurrentStateService {
         
         if (currentState.isPresent()) {
             ScaleCurrentState state = currentState.get();
+
+            if (normalizedStatus != null && !normalizedStatus.equalsIgnoreCase(normalizeFilterValue(state.getStatus()))) {
+                return null;
+            }
+
             builder.status(state.getStatus())
                    .lastTime(state.getLastTime());
 
@@ -63,60 +96,51 @@ public class ScaleCurrentStateService {
             
             if (scale.getConfig() != null) {
                 ScaleConfig config = scale.getConfig();
-                
-                // data_1
-                if (config.getData1() != null && !config.getData1().isEmpty()) {
-                    dataValues.put("data_1", ScaleCurrentStateDto.DataFieldValue.builder()
-                            .value(state.getData1())
-                            .name((String) config.getData1().get("name"))
-                            .isUsed((Boolean) config.getData1().getOrDefault("is_used", false))
-                            .build());
-                }
-                
-                // data_2
-                if (config.getData2() != null && !config.getData2().isEmpty()) {
-                    dataValues.put("data_2", ScaleCurrentStateDto.DataFieldValue.builder()
-                            .value(state.getData2())
-                            .name((String) config.getData2().get("name"))
-                            .isUsed((Boolean) config.getData2().getOrDefault("is_used", false))
-                            .build());
-                }
-                
-                // data_3
-                if (config.getData3() != null && !config.getData3().isEmpty()) {
-                    dataValues.put("data_3", ScaleCurrentStateDto.DataFieldValue.builder()
-                            .value(state.getData3())
-                            .name((String) config.getData3().get("name"))
-                            .isUsed((Boolean) config.getData3().getOrDefault("is_used", false))
-                            .build());
-                }
-                
-                // data_4
-                if (config.getData4() != null && !config.getData4().isEmpty()) {
-                    dataValues.put("data_4", ScaleCurrentStateDto.DataFieldValue.builder()
-                            .value(state.getData4())
-                            .name((String) config.getData4().get("name"))
-                            .isUsed((Boolean) config.getData4().getOrDefault("is_used", false))
-                            .build());
-                }
-                
-                // data_5
-                if (config.getData5() != null && !config.getData5().isEmpty()) {
-                    dataValues.put("data_5", ScaleCurrentStateDto.DataFieldValue.builder()
-                            .value(state.getData5())
-                            .name((String) config.getData5().get("name"))
-                            .isUsed((Boolean) config.getData5().getOrDefault("is_used", false))
-                            .build());
-                }
+
+                maybePutDataValue(dataValues, "data_1", state.getData1(), config.getData1());
+                maybePutDataValue(dataValues, "data_2", state.getData2(), config.getData2());
+                maybePutDataValue(dataValues, "data_3", state.getData3(), config.getData3());
+                maybePutDataValue(dataValues, "data_4", state.getData4(), config.getData4());
+                maybePutDataValue(dataValues, "data_5", state.getData5(), config.getData5());
             }
             
             builder.dataValues(dataValues);
         } else {
             // No current state yet
+            if (normalizedStatus != null) {
+                return null;
+            }
             builder.dataValues(new LinkedHashMap<>());
         }
 
         return builder.build();
+    }
+
+    private String normalizeFilterValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void maybePutDataValue(
+            Map<String, ScaleCurrentStateDto.DataFieldValue> dataValues,
+            String key,
+            String value,
+            Map<String, Object> config
+    ) {
+        if (config == null || config.isEmpty()) {
+            return;
+        }
+
+        String configuredName = (String) config.get("name");
+
+        dataValues.put(key, ScaleCurrentStateDto.DataFieldValue.builder()
+                .value(value)
+                .name(configuredName)
+                .isUsed((Boolean) config.getOrDefault("is_used", false))
+                .build());
     }
 
     @Transactional

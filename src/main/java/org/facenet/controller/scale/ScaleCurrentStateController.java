@@ -7,6 +7,7 @@ import org.facenet.service.scale.ScaleCurrentStateService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -25,8 +26,12 @@ public class ScaleCurrentStateController {
      * Get current state of all scales with config info
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ScaleCurrentStateDto>>> getAllScalesCurrentStates() {
-        List<ScaleCurrentStateDto> states = scaleCurrentStateService.getAllScalesWithConfig();
+    public ResponseEntity<ApiResponse<List<ScaleCurrentStateDto>>> getAllScalesCurrentStates(
+            @RequestParam(value = "scale_id", required = false) Long scaleId,
+            @RequestParam(value = "scale_ids", required = false) List<Long> scaleIds,
+            @RequestParam(value = "status", required = false) String status
+    ) {
+        List<ScaleCurrentStateDto> states = scaleCurrentStateService.getScalesWithConfig(scaleId, scaleIds, status);
         return ResponseEntity.ok(ApiResponse.success(states));
     }
 }
