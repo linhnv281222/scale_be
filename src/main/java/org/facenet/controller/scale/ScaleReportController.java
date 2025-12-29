@@ -4,6 +4,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.common.response.ApiResponse;
+import org.facenet.dto.scale.IntervalReportRequestDto;
+import org.facenet.dto.scale.IntervalReportResponseDto;
 import org.facenet.dto.scale.ReportRequestDto;
 import org.facenet.dto.scale.ReportResponseDto;
 import org.facenet.service.scale.report.ReportService;
@@ -38,6 +40,25 @@ public class ScaleReportController {
             log.error("[REPORT-API] Error generating report: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Failed to generate report: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Generate interval statistics report (SHIFT/HOUR/DAY/WEEK) with per-field aggregation.
+     */
+    @PostMapping("/interval")
+    public ResponseEntity<ApiResponse<IntervalReportResponseDto>> generateIntervalReport(
+            @Valid @RequestBody IntervalReportRequestDto request) {
+
+        log.info("[REPORT-API] Generating interval report: {}", request);
+
+        try {
+            IntervalReportResponseDto report = reportService.generateIntervalReport(request);
+            return ResponseEntity.ok(ApiResponse.success(report));
+        } catch (Exception e) {
+            log.error("[REPORT-API] Error generating interval report: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Failed to generate interval report: " + e.getMessage()));
         }
     }
 

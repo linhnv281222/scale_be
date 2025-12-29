@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.List;
 
 /**
@@ -44,6 +45,20 @@ public class ReportExportRequest {
      */
     @Builder.Default
     private AggregationMethod aggregationMethod = AggregationMethod.SUM;
+
+    /**
+     * Optional per-field aggregation methods.
+     * Keys: data_1..data_5
+     * If provided (non-empty), overrides {@link #aggregationMethod}.
+     */
+    private Map<String, AggregationMethod> aggregationByField;
+
+    /**
+     * When true, export reuses the interval report engine (supports SHIFT and ABS default rules).
+     * If false/null, export uses the legacy in-memory aggregation path.
+     */
+    @Builder.Default
+    private Boolean intervalReport = false;
     
     /**
      * Time interval for grouping: HOUR, DAY, WEEK, MONTH, YEAR
@@ -79,10 +94,12 @@ public class ReportExportRequest {
         AVG,    // Trung bình
         MAX,    // Lớn nhất
         MIN,    // Nhỏ nhất
-        COUNT   // Đếm số lượng
+        COUNT,  // Đếm số lượng
+        ABS     // Độ lệch (|MAX - MIN|)
     }
     
     public enum TimeInterval {
+        SHIFT,  // Theo ca
         HOUR,   // Theo giờ
         DAY,    // Theo ngày
         WEEK,   // Theo tuần

@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.dto.report.ReportData;
 import org.facenet.dto.report.ReportExportRequest;
 import org.facenet.dto.report.ReportTemplateDto;
+import org.facenet.dto.scale.IntervalReportRequestDto;
+import org.facenet.dto.scale.IntervalReportResponseDto;
 import org.facenet.entity.report.*;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
@@ -14,6 +16,7 @@ import org.facenet.repository.report.ReportTemplateRepository;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.facenet.repository.scale.WeighingLogRepository;
+import org.facenet.service.scale.report.ReportService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,6 +40,7 @@ public class ReportTemplateService {
     private final WeighingLogRepository weighingLogRepository;
     private final ScaleRepository scaleRepository;
     private final ScaleConfigRepository scaleConfigRepository;
+    private final ReportService scaleReportService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -272,6 +276,11 @@ public class ReportTemplateService {
         OffsetDateTime endTime = request.getEndTime();
         List<Long> scaleIds = request.getScaleIds();
         String preparedBy = request.getPreparedBy();
+
+        boolean shouldUseIntervalEngine = Boolean.TRUE.equals(request.getIntervalReport())
+            || request.getTimeInterval() == ReportExportRequest.TimeInterval.SHIFT
+            || (request.getAggregationByField() != null && !request.getAggregationByField().isEmpty())
+            || request.getAggregationMethod() == ReportExportRequest.AggregationMethod.ABS;
         
         log.info("Building report data with template: {} for period {} to {}", 
                 template.getCode(), startTime, endTime);
@@ -283,6 +292,13 @@ public class ReportTemplateService {
         
         if (startTime.isAfter(endTime)) {
             throw new IllegalArgumentException("Start time must be before end time");
+        }
+
+        if (shouldUseIntervalEngine) {
+            log.info("Using interval report engine for export (intervalReport={}, timeInterval={}, hasPerFieldAgg={})",
+                    request.getIntervalReport(), request.getTimeInterval(),
+                    request.getAggregationByField() != null && !request.getAggregationByField().isEmpty());
+            return buildIntervalEngineReportData(template, request);
         }
 
         OrganizationSettings org = getOrganizationSettings();
@@ -460,6 +476,168 @@ public class ReportTemplateService {
                 .data4Name(columnNames[3])
                 .data5Name(columnNames[4])
                 .build();
+    }
+
+    private ReportData buildIntervalEngineReportData(ReportTemplate template, ReportExportRequest request) {
+        OffsetDateTime startTime = request.getStartTime();
+        OffsetDateTime endTime = request.getEndTime();
+
+        if (request.getTimeInterval() == null) {
+            throw new IllegalArgumentException("timeInterval is required when using interval report export");
+        }
+
+        IntervalReportRequestDto.TimeInterval interval = switch (request.getTimeInterval()) {
+            case SHIFT -> IntervalReportRequestDto.TimeInterval.SHIFT;
+            case HOUR -> IntervalReportRequestDto.TimeInterval.HOUR;
+            case DAY -> IntervalReportRequestDto.TimeInterval.DAY;
+            case WEEK -> IntervalReportRequestDto.TimeInterval.WEEK;
+            case MONTH, YEAR -> throw new IllegalArgumentException("Interval report export supports only SHIFT/HOUR/DAY/WEEK");
+        };
+
+        Map<String, IntervalReportRequestDto.AggregationMethod> aggregationByField = null;
+        if (request.getAggregationByField() != null && !request.getAggregationByField().isEmpty()) {
+            aggregationByField = new HashMap<>();
+            for (Map.Entry<String, ReportExportRequest.AggregationMethod> e : request.getAggregationByField().entrySet()) {
+                if (e.getKey() == null || e.getValue() == null) {
+                    continue;
+                }
+                IntervalReportRequestDto.AggregationMethod mapped = switch (e.getValue()) {
+                    case SUM -> IntervalReportRequestDto.AggregationMethod.SUM;
+                    case AVG -> IntervalReportRequestDto.AggregationMethod.AVG;
+                    case MAX -> IntervalReportRequestDto.AggregationMethod.MAX;
+                    case MIN -> IntervalReportRequestDto.AggregationMethod.MIN;
+                    case COUNT -> IntervalReportRequestDto.AggregationMethod.COUNT;
+                    case ABS -> IntervalReportRequestDto.AggregationMethod.ABS;
+                };
+                aggregationByField.put(e.getKey(), mapped);
+            }
+            if (aggregationByField.isEmpty()) {
+                aggregationByField = null;
+            }
+        }
+
+        IntervalReportRequestDto intervalRequest = IntervalReportRequestDto.builder()
+                .scaleIds(request.getScaleIds())
+                .fromDate(startTime.toLocalDate())
+                .toDate(endTime.toLocalDate())
+            .fromTime(startTime)
+            .toTime(endTime)
+                .interval(interval)
+                .aggregationByField(aggregationByField)
+                .build();
+
+        IntervalReportResponseDto intervalResponse = scaleReportService.generateIntervalReport(intervalRequest);
+
+        List<ReportData.ReportRow> rows = new ArrayList<>();
+        int rowNumber = 1;
+        if (intervalResponse.getRows() != null) {
+            for (IntervalReportResponseDto.Row r : intervalResponse.getRows()) {
+                IntervalReportResponseDto.ScaleInfo s = r != null ? r.getScale() : null;
+                Map<String, IntervalReportResponseDto.DataFieldValue> dv = r != null ? r.getDataValues() : null;
+
+                rows.add(ReportData.ReportRow.builder()
+                        .rowNumber(rowNumber++)
+                        .scaleId(s != null ? s.getId() : null)
+                        .scaleCode(s != null && s.getId() != null ? "SCALE-" + s.getId() : null)
+                        .scaleName(s != null ? s.getName() : null)
+                        .location(s != null && s.getLocation() != null ? s.getLocation().getName() : "N/A")
+                        .period(r != null ? r.getPeriod() : null)
+                        .recordCount(r != null ? r.getRecordCount() : 0)
+                        .data1Total(parseNullableDouble(dv != null ? dv.get("data_1") : null))
+                        .data2Total(parseNullableDouble(dv != null ? dv.get("data_2") : null))
+                        .data3Total(parseNullableDouble(dv != null ? dv.get("data_3") : null))
+                        .data4Total(parseNullableDouble(dv != null ? dv.get("data_4") : null))
+                        .data5Total(parseNullableDouble(dv != null ? dv.get("data_5") : null))
+                        .lastTime(null)
+                        .build());
+            }
+        }
+
+        rows.sort(Comparator
+                .comparing(ReportData.ReportRow::getPeriod, Comparator.nullsLast(String::compareTo))
+                .thenComparing(ReportData.ReportRow::getScaleId, Comparator.nullsLast(Long::compareTo)));
+
+        ReportData.ReportSummary summary = calculateSummary(rows, template);
+
+        OrganizationSettings org = getOrganizationSettings();
+        String title = buildTitle(template, startTime, endTime);
+
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("totalLogs", rows.stream().mapToInt(r -> r.getRecordCount() != null ? r.getRecordCount() : 0).sum());
+        metadata.put("dateRange", formatDateRange(startTime, endTime));
+        metadata.put("organizationName", org.getCompanyName());
+        metadata.put("watermark", org.getWatermarkText());
+        metadata.put("template", template);
+        metadata.put("intervalEngine", true);
+        metadata.put("timeInterval", request.getTimeInterval() != null ? request.getTimeInterval().name() : null);
+        metadata.put("aggregationByField", intervalResponse.getAggregationByField());
+
+        // Column names: prefer first row (already applies special "Khối lượng" rename), fallback to response map
+        String data1Name = null;
+        String data2Name = null;
+        String data3Name = null;
+        String data4Name = null;
+        String data5Name = null;
+
+        if (!rows.isEmpty() && intervalResponse.getRows() != null && !intervalResponse.getRows().isEmpty()) {
+            IntervalReportResponseDto.Row first = intervalResponse.getRows().get(0);
+            if (first != null && first.getDataValues() != null) {
+                data1Name = first.getDataValues().get("data_1") != null ? first.getDataValues().get("data_1").getName() : null;
+                data2Name = first.getDataValues().get("data_2") != null ? first.getDataValues().get("data_2").getName() : null;
+                data3Name = first.getDataValues().get("data_3") != null ? first.getDataValues().get("data_3").getName() : null;
+                data4Name = first.getDataValues().get("data_4") != null ? first.getDataValues().get("data_4").getName() : null;
+                data5Name = first.getDataValues().get("data_5") != null ? first.getDataValues().get("data_5").getName() : null;
+            }
+        }
+
+        if (data1Name == null || data2Name == null || data3Name == null || data4Name == null || data5Name == null) {
+            Map<String, String> fallback = intervalResponse.getDataFieldNames();
+            if (fallback != null) {
+                if (data1Name == null) data1Name = fallback.get("data_1");
+                if (data2Name == null) data2Name = fallback.get("data_2");
+                if (data3Name == null) data3Name = fallback.get("data_3");
+                if (data4Name == null) data4Name = fallback.get("data_4");
+                if (data5Name == null) data5Name = fallback.get("data_5");
+            }
+        }
+
+        data1Name = sanitizeDisplayName(data1Name);
+        data2Name = sanitizeDisplayName(data2Name);
+        data3Name = sanitizeDisplayName(data3Name);
+        data4Name = sanitizeDisplayName(data4Name);
+        data5Name = sanitizeDisplayName(data5Name);
+
+        return ReportData.builder()
+                .reportTitle(title)
+                .reportCode(template.getCode() + "-" + System.currentTimeMillis())
+                .startTime(startTime)
+                .endTime(endTime)
+                .exportTime(OffsetDateTime.now())
+                .preparedBy(request.getPreparedBy() != null ? request.getPreparedBy() : "System")
+                .rows(rows)
+                .summary(summary)
+                .metadata(metadata)
+                .data1Name(data1Name)
+                .data2Name(data2Name)
+                .data3Name(data3Name)
+                .data4Name(data4Name)
+                .data5Name(data5Name)
+                .build();
+    }
+
+    private static Double parseNullableDouble(IntervalReportResponseDto.DataFieldValue value) {
+        if (value == null || value.getValue() == null) {
+            return 0.0;
+        }
+        String s = value.getValue().trim();
+        if (s.isEmpty()) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(s);
+        } catch (Exception ignored) {
+            return 0.0;
+        }
     }
 
     private static String sanitizeDisplayName(String value) {
@@ -755,6 +933,7 @@ public class ReportTemplateService {
             case MAX -> ReportColumn.AggregationType.MAX;
             case MIN -> ReportColumn.AggregationType.MIN;
             case COUNT -> ReportColumn.AggregationType.COUNT;
+            case ABS -> ReportColumn.AggregationType.SUM;
         };
     }
 
@@ -768,6 +947,7 @@ public class ReportTemplateService {
             case MAX -> "Lớn nhất (MAX)";
             case MIN -> "Nhỏ nhất (MIN)";
             case COUNT -> "Đếm (COUNT)";
+            case ABS -> "Độ lệch (ABS)";
         };
     }
 

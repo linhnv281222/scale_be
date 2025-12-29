@@ -2,6 +2,8 @@ package org.facenet.service.scale.report;
 
 import org.facenet.dto.scale.ReportRequestDto;
 import org.facenet.dto.scale.ReportResponseDto;
+import org.facenet.dto.scale.IntervalReportRequestDto;
+import org.facenet.dto.scale.IntervalReportResponseDto;
 
 /**
  * Service for generating reports and statistics
@@ -15,6 +17,11 @@ public interface ReportService {
      * @return report response with data points
      */
     ReportResponseDto generateReport(ReportRequestDto request);
+
+    /**
+     * Generate interval statistics report (SHIFT/HOUR/DAY/WEEK) with per-field aggregation.
+     */
+    IntervalReportResponseDto generateIntervalReport(IntervalReportRequestDto request);
 
     /**
      * Aggregate daily data into scale_daily_reports table

@@ -165,6 +165,7 @@ public class ReportAggregationService {
             case MAX -> String.format("MAX(%s)", castExpression);
             case MIN -> String.format("MIN(%s)", castExpression);
             case COUNT -> "COUNT(*)";
+            case ABS -> String.format("ABS(MAX(%1$s) - MIN(%1$s))", castExpression);
         };
     }
     
@@ -227,6 +228,7 @@ public class ReportAggregationService {
     private String getDateTruncParameter(ReportExportRequest.TimeInterval interval) {
         if (interval == null) return "day";
         return switch (interval) {
+            case SHIFT -> "day";
             case HOUR -> "hour";
             case DAY -> "day";
             case WEEK -> "week";
