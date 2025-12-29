@@ -18,7 +18,7 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 
 # Install required packages
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata fontconfig ttf-dejavu
 
 # Set timezone
 ENV TZ=Asia/Ho_Chi_Minh

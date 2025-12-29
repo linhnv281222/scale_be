@@ -350,18 +350,38 @@ public class ExcelExportService {
      * Get column value from row data
      */
     private Object getColumnValue(ReportData.ReportRow row, ReportColumn column) {
-        return switch (column.getDataField()) {
+        if (row == null || column == null) {
+            return "";
+        }
+        String dataField = normalizeDataField(column);
+        if (dataField == null || dataField.isBlank()) {
+            return "";
+        }
+
+        return switch (dataField) {
             case "row_number" -> row.getRowNumber();
+            case "rowNumber" -> row.getRowNumber();
             case "scale_code" -> row.getScaleCode();
+            case "scaleCode" -> row.getScaleCode();
+            case "code" -> row.getScaleCode();
             case "scale_name" -> row.getScaleName();
+            case "scaleName" -> row.getScaleName();
+            case "name" -> row.getScaleName();
             case "location" -> row.getLocation();
             case "data_1" -> row.getData1Total();
+            case "data1Total" -> row.getData1Total();
             case "data_2" -> row.getData2Total();
+            case "data2Total" -> row.getData2Total();
             case "data_3" -> row.getData3Total();
+            case "data3Total" -> row.getData3Total();
             case "data_4" -> row.getData4Total();
+            case "data4Total" -> row.getData4Total();
             case "data_5" -> row.getData5Total();
+            case "data5Total" -> row.getData5Total();
             case "record_count" -> row.getPeriod();
+            case "recordCount" -> row.getPeriod();
             case "last_time" -> row.getLastTime();
+            case "lastTime" -> row.getLastTime();
             default -> "";
         };
     }
@@ -375,7 +395,13 @@ public class ExcelExportService {
             if (column == null) {
                 continue;
             }
-            String dataField = column.getDataField();
+            if (Boolean.FALSE.equals(column.getIsVisible())) {
+                continue;
+            }
+            String dataField = normalizeDataField(column);
+            if (!hasText(dataField)) {
+                continue;
+            }
             if (Objects.equals(dataField, "data_1") && !hasText(reportData.getData1Name())) {
                 continue;
             }
@@ -401,7 +427,11 @@ public class ExcelExportService {
     }
 
     private static String resolveColumnLabel(ReportColumn column, ReportData reportData) {
-        String dataField = column != null ? column.getDataField() : null;
+        String dataField = normalizeDataField(column);
+        if (Objects.equals(dataField, "record_count") || Objects.equals(dataField, "recordCount")) {
+            // record_count column is repurposed to show period
+            return "Kỳ";
+        }
         if (Objects.equals(dataField, "data_1")) {
             return reportData.getData1Name();
         }
@@ -418,6 +448,18 @@ public class ExcelExportService {
             return reportData.getData5Name();
         }
         return column != null ? column.getColumnLabel() : "";
+    }
+
+    private static String normalizeDataField(ReportColumn column) {
+        if (column == null) {
+            return null;
+        }
+        String dataField = column.getDataField();
+        if (hasText(dataField)) {
+            return dataField.trim();
+        }
+        String columnKey = column.getColumnKey();
+        return hasText(columnKey) ? columnKey.trim() : null;
     }
 
     /**
@@ -511,8 +553,11 @@ public class ExcelExportService {
         }
         for (int i = 0; i < columns.size(); i++) {
             ReportColumn column = columns.get(i);
-            String dataField = column != null ? column.getDataField() : null;
-            if (dataField == null) {
+            if (column == null || Boolean.FALSE.equals(column.getIsVisible())) {
+                continue;
+            }
+            String dataField = normalizeDataField(column);
+            if (!hasText(dataField)) {
                 continue;
             }
             if (Objects.equals(dataField, "record_count")) {

@@ -13,7 +13,7 @@
         }
 
         body {
-            font-family: 'Times New Roman', serif;
+            font-family: 'DejaVu Sans', 'Times New Roman', serif;
             font-size: 12pt;
             color: #000;
             margin: 0;
@@ -168,8 +168,8 @@
     </style>
 </head>
 <body>
-    <!-- Watermark -->
-    <div class="watermark">HỆ THỐNG SCALEHUB</div>
+<!--    &lt;!&ndash; Watermark &ndash;&gt;-->
+<!--    <div class="watermark">HỆ THỐNG SCALEHUB</div>-->
 
     <!-- Header -->
     <div class="header">
@@ -201,34 +201,16 @@
         </table>
     </div>
 
-    <!-- Data Table -->
+    <!-- Data Table (dynamic columns, matches Word/Excel) -->
     <table class="data-table">
         <thead>
             <tr>
-                <th style="width: 5%;">STT</th>
-                <th style="width: 10%;">Mã trạm</th>
-                <th style="width: 15%;">Tên trạm</th>
-                <th style="width: 12%;">Vị trí</th>
-                <th style="width: 10%;" th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}" th:text="${report.data1Name}"></th>
-                <th style="width: 10%;" th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}" th:text="${report.data2Name}"></th>
-                <th style="width: 10%;" th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}" th:text="${report.data3Name}"></th>
-                <th style="width: 10%;" th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}" th:text="${report.data4Name}"></th>
-                <th style="width: 10%;" th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}" th:text="${report.data5Name}"></th>
-                <th style="width: 8%;">Kỳ</th>
+                <th th:each="col : ${pdfColumns}" th:text="${col.label}"></th>
             </tr>
         </thead>
         <tbody>
-            <tr th:each="row : ${report.rows}">
-                <td th:text="${row.rowNumber}">1</td>
-                <td th:text="${row.scaleCode != null ? row.scaleCode : ''}">SCALE-1</td>
-                <td class="text-left" th:text="${row.scaleName != null ? row.scaleName : ''}">Trạm cân 1</td>
-                <td class="text-left" th:text="${row.location != null ? row.location : 'N/A'}">Xưởng A</td>
-                <td class="number" th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}" th:text="${dataFormatter.formatNumber(row.data1Total)}">1,250.50</td>
-                <td class="number" th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}" th:text="${dataFormatter.formatNumber(row.data2Total)}">980.00</td>
-                <td class="number" th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}" th:text="${dataFormatter.formatNumber(row.data3Total)}">750.25</td>
-                <td class="number" th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}" th:text="${dataFormatter.formatNumber(row.data4Total)}">620.75</td>
-                <td class="number" th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}" th:text="${dataFormatter.formatNumber(row.data5Total)}">450.00</td>
-                <td th:text="${row.period != null ? row.period : ''}"></td>
+            <tr th:each="r : ${pdfRows}">
+                <td th:each="col : ${pdfColumns}" th:class="${col.cssClass}" th:text="${r.cells.get(col.key)}"></td>
             </tr>
         </tbody>
     </table>
@@ -243,65 +225,17 @@
                 <td>Tổng số bản ghi:</td>
                 <td class="number" th:text="${report.summary.totalRecords}">1,250</td>
             </tr>
-            <tr th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}">
-                <td th:text="'Tổng ' + report.data1Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1GrandTotal)}">12,505.00</td>
-                <td th:text="'Trung bình ' + report.data1Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Average)}">1,250.50</td>
+            <tr th:each="sr : ${pdfSummaryRows}">
+                <td th:text="${sr.c1}"></td>
+                <td class="number" th:text="${sr.c2}"></td>
+                <td th:text="${sr.c3}"></td>
+                <td class="number" th:text="${sr.c4}"></td>
             </tr>
-            <tr th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}">
-                <td th:text="'Tổng ' + report.data2Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2GrandTotal)}">9,800.00</td>
-                <td th:text="'Trung bình ' + report.data2Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Average)}">980.00</td>
-            </tr>
-            <tr th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}">
-                <td th:text="'Tổng ' + report.data3Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3GrandTotal)}">7,502.50</td>
-                <td th:text="'Trung bình ' + report.data3Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3Average)}">750.25</td>
-            </tr>
-            <tr th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}">
-                <td th:text="'Tổng ' + report.data4Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data4GrandTotal)}"></td>
-                <td th:text="'Trung bình ' + report.data4Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data4Average)}"></td>
-            </tr>
-            <tr th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}">
-                <td th:text="'Tổng ' + report.data5Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data5GrandTotal)}"></td>
-                <td th:text="'Trung bình ' + report.data5Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data5Average)}"></td>
-            </tr>
-            <tr th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}">
-                <td th:text="'Giá trị lớn nhất ' + report.data1Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Max)}">2,500.00</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}">
-                <td th:text="'Giá trị lớn nhất ' + report.data2Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Max)}">1,800.00</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}">
-                <td th:text="'Giá trị lớn nhất ' + report.data3Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3Max)}"></td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}">
-                <td th:text="'Giá trị lớn nhất ' + report.data4Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data4Max)}"></td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}">
-                <td th:text="'Giá trị lớn nhất ' + report.data5Name + ':'"></td>
-                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data5Max)}"></td>
-                <td></td>
-                <td></td>
+            <tr th:each="mr : ${pdfMaxRows}">
+                <td th:text="${mr.c1}"></td>
+                <td class="number" th:text="${mr.c2}"></td>
+                <td th:text="${mr.c3}"></td>
+                <td class="number" th:text="${mr.c4}"></td>
             </tr>
         </table>
     </div>
@@ -322,9 +256,9 @@
         </div>
     </div>
 
-    <!-- Footer -->
-    <div class="footer">
-        <p>Báo cáo được tạo tự động bởi Hệ thống ScaleHub IoT | INTERNAL ONLY - BẢO MẬT</p>
-    </div>
+<!--    &lt;!&ndash; Footer &ndash;&gt;-->
+<!--    <div class="footer">-->
+<!--        <p>Báo cáo được tạo tự động bởi Hệ thống ScaleHub IoT | INTERNAL ONLY - BẢO MẬT</p>-->
+<!--    </div>-->
 </body>
 </html>

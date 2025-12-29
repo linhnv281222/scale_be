@@ -43,6 +43,15 @@ public class ReportTemplate extends Auditable {
     @Column(name = "title_template", length = 500)
     private String titleTemplate;
 
+    // ===== WORD template file (DOCX) =====
+    @Column(name = "word_template_filename", length = 255)
+    private String wordTemplateFilename;
+
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "word_template_content")
+    private byte[] wordTemplateContent;
+
     // JSONB configurations
     @Type(JsonBinaryType.class)
     @Column(name = "header_config", columnDefinition = "jsonb")

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
 import org.facenet.dto.report.ReportData;
 import org.facenet.entity.report.OrganizationSettings;
+import org.facenet.entity.report.ReportTemplate;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -65,8 +66,25 @@ public class WordExportService {
     public byte[] exportToWord(ReportData reportData) throws IOException {
         log.info("Exporting report to Word: {}", reportData.getReportTitle());
 
-        // Try to load template first
+        // 1) Prefer configured template from ReportTemplate (selected by templateId in export API)
         InputStream templateStream = null;
+        try {
+            ReportTemplate configuredTemplate = getReportTemplateFromMetadata(reportData);
+            if (configuredTemplate != null && configuredTemplate.getWordTemplateContent() != null
+                    && configuredTemplate.getWordTemplateContent().length > 0) {
+                templateStream = new java.io.ByteArrayInputStream(configuredTemplate.getWordTemplateContent());
+                return exportWithTemplate(reportData, templateStream);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to use configured WORD template from metadata, falling back. Error: {}", e.getMessage());
+        } finally {
+            if (templateStream != null) {
+                try { templateStream.close(); } catch (IOException ignored) {}
+            }
+        }
+
+        // 2) Fall back to bundled classpath template
+        templateStream = null;
         try {
             templateStream = new ClassPathResource(TEMPLATE_PATH).getInputStream();
             return exportWithTemplate(reportData, templateStream);
@@ -78,6 +96,17 @@ public class WordExportService {
                 try { templateStream.close(); } catch (IOException ignored) {}
             }
         }
+    }
+
+    private ReportTemplate getReportTemplateFromMetadata(ReportData reportData) {
+        if (reportData == null || reportData.getMetadata() == null) {
+            return null;
+        }
+        Object templateObj = reportData.getMetadata().get("template");
+        if (templateObj instanceof ReportTemplate template) {
+            return template;
+        }
+        return null;
     }
 
     /**

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.dto.report.ReportData;
 import org.facenet.dto.report.ReportExportRequest;
+import org.facenet.dto.report.ReportTemplateDto;
 import org.facenet.entity.report.*;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
@@ -15,7 +16,9 @@ import org.facenet.repository.scale.ScaleRepository;
 import org.facenet.repository.scale.WeighingLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -36,6 +39,8 @@ public class ReportTemplateService {
     private final ScaleConfigRepository scaleConfigRepository;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    public record WordTemplateFile(String filename, byte[] content) {}
 
     /**
      * Get template with columns by ID
@@ -69,6 +74,167 @@ public class ReportTemplateService {
                     }
                     return templates.get(0);
                 });
+    }
+
+    // ===== WORD template management APIs =====
+
+    @Transactional(readOnly = true)
+    public List<ReportTemplateDto.WordTemplateResponse> listWordTemplates(boolean activeOnly) {
+        List<ReportTemplate> templates = activeOnly
+                ? templateRepository.findByReportTypeAndIsActiveTrue(ReportTemplate.ReportType.WORD)
+                : templateRepository.findAll().stream()
+                    .filter(t -> t.getReportType() == ReportTemplate.ReportType.WORD)
+                    .toList();
+
+        return templates.stream().map(this::toWordTemplateResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ReportTemplateDto.WordTemplateResponse getWordTemplateResponse(Long id) {
+        ReportTemplate template = templateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Template not found: " + id));
+        if (template.getReportType() != ReportTemplate.ReportType.WORD) {
+            throw new IllegalArgumentException("Template is not WORD type: " + id);
+        }
+        return toWordTemplateResponse(template);
+    }
+
+    @Transactional
+    public ReportTemplateDto.WordTemplateResponse createWordTemplate(ReportTemplateDto.CreateWordTemplateRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("request must not be null");
+        }
+        String code = request.getCode() != null ? request.getCode().trim() : null;
+        if (code == null || code.isEmpty()) {
+            throw new IllegalArgumentException("code must not be blank");
+        }
+        if (templateRepository.findByCode(code).isPresent()) {
+            throw new IllegalArgumentException("Template code already exists: " + code);
+        }
+
+        ReportTemplate template = ReportTemplate.builder()
+                .code(code)
+                .name(request.getName())
+                .description(request.getDescription())
+                .titleTemplate(request.getTitleTemplate())
+                .reportType(ReportTemplate.ReportType.WORD)
+                .isActive(request.getIsActive() != null ? request.getIsActive() : true)
+                .isDefault(request.getIsDefault() != null ? request.getIsDefault() : false)
+                .build();
+
+        template = templateRepository.save(template);
+
+        if (Boolean.TRUE.equals(template.getIsDefault())) {
+            unsetOtherDefaults(template.getId(), ReportTemplate.ReportType.WORD);
+        }
+
+        return toWordTemplateResponse(template);
+    }
+
+    @Transactional
+    public ReportTemplateDto.WordTemplateResponse updateWordTemplate(Long id, ReportTemplateDto.UpdateWordTemplateRequest request) {
+        ReportTemplate template = templateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Template not found: " + id));
+        if (template.getReportType() != ReportTemplate.ReportType.WORD) {
+            throw new IllegalArgumentException("Template is not WORD type: " + id);
+        }
+        if (request.getName() != null) {
+            template.setName(request.getName());
+        }
+        if (request.getDescription() != null) {
+            template.setDescription(request.getDescription());
+        }
+        if (request.getTitleTemplate() != null) {
+            template.setTitleTemplate(request.getTitleTemplate());
+        }
+        if (request.getIsActive() != null) {
+            template.setIsActive(request.getIsActive());
+        }
+        template = templateRepository.save(template);
+        return toWordTemplateResponse(template);
+    }
+
+    @Transactional
+    public ReportTemplateDto.WordTemplateResponse setDefaultWordTemplate(Long id) {
+        ReportTemplate template = templateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Template not found: " + id));
+        if (template.getReportType() != ReportTemplate.ReportType.WORD) {
+            throw new IllegalArgumentException("Template is not WORD type: " + id);
+        }
+        template.setIsDefault(true);
+        template = templateRepository.save(template);
+        unsetOtherDefaults(template.getId(), ReportTemplate.ReportType.WORD);
+        return toWordTemplateResponse(template);
+    }
+
+    @Transactional
+    public ReportTemplateDto.WordTemplateResponse uploadWordTemplateFile(Long id, MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("file must not be empty");
+        }
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null && !originalFilename.toLowerCase(Locale.ROOT).endsWith(".docx")) {
+            throw new IllegalArgumentException("Only .docx templates are supported");
+        }
+
+        ReportTemplate template = templateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Template not found: " + id));
+        if (template.getReportType() != ReportTemplate.ReportType.WORD) {
+            throw new IllegalArgumentException("Template is not WORD type: " + id);
+        }
+
+        template.setWordTemplateFilename(originalFilename);
+        template.setWordTemplateContent(file.getBytes());
+        template = templateRepository.save(template);
+        return toWordTemplateResponse(template);
+    }
+
+    @Transactional(readOnly = true)
+    public WordTemplateFile getWordTemplateFile(Long id) {
+        ReportTemplate template = templateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Template not found: " + id));
+        if (template.getReportType() != ReportTemplate.ReportType.WORD) {
+            throw new IllegalArgumentException("Template is not WORD type: " + id);
+        }
+        byte[] content = template.getWordTemplateContent();
+        if (content == null || content.length == 0) {
+            throw new IllegalStateException("WORD template file is not configured for template: " + id);
+        }
+        return new WordTemplateFile(template.getWordTemplateFilename(), content);
+    }
+
+    @Transactional
+    public void deleteWordTemplate(Long id) {
+        ReportTemplate template = templateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Template not found: " + id));
+        if (template.getReportType() != ReportTemplate.ReportType.WORD) {
+            throw new IllegalArgumentException("Template is not WORD type: " + id);
+        }
+        templateRepository.delete(template);
+    }
+
+    private void unsetOtherDefaults(Long keepTemplateId, ReportTemplate.ReportType type) {
+        templateRepository.findByReportTypeAndIsDefaultTrue(type).ifPresent(existing -> {
+            if (!Objects.equals(existing.getId(), keepTemplateId)) {
+                existing.setIsDefault(false);
+                templateRepository.save(existing);
+            }
+        });
+    }
+
+    private ReportTemplateDto.WordTemplateResponse toWordTemplateResponse(ReportTemplate template) {
+        boolean hasFile = template.getWordTemplateContent() != null && template.getWordTemplateContent().length > 0;
+        return ReportTemplateDto.WordTemplateResponse.builder()
+                .id(template.getId())
+                .code(template.getCode())
+                .name(template.getName())
+                .description(template.getDescription())
+                .titleTemplate(template.getTitleTemplate())
+                .isActive(template.getIsActive())
+                .isDefault(template.getIsDefault())
+                .wordTemplateFilename(template.getWordTemplateFilename())
+                .hasWordTemplateFile(hasFile)
+                .build();
     }
 
     /**
@@ -264,6 +430,9 @@ public class ReportTemplateService {
         
         // Get column names from scale config (only for fields with config)
         String[] columnNames = getColumnNamesFromConfig(uniqueScaleIds.isEmpty() ? null : uniqueScaleIds.get(0));
+        for (int i = 0; i < columnNames.length; i++) {
+            columnNames[i] = sanitizeDisplayName(columnNames[i]);
+        }
         
         // Set column names in metadata for reference (only non-null names)
         metadata.put("activeFields", hasData);
@@ -291,6 +460,24 @@ public class ReportTemplateService {
                 .data4Name(columnNames[3])
                 .data5Name(columnNames[4])
                 .build();
+    }
+
+    private static String sanitizeDisplayName(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        // Treat common template/placeholder-looking values as "not configured"
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("report.") || lower.contains("${") || lower.contains("th:")) {
+            return null;
+        }
+
+        return trimmed;
     }
     
     /**
