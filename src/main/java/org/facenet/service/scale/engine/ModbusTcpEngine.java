@@ -13,6 +13,7 @@ import org.facenet.service.scale.engine.util.ModbusDataConverter;
 
 import java.net.InetAddress;
 import java.time.ZonedDateTime;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 
@@ -48,15 +49,16 @@ public class ModbusTcpEngine implements ScaleEngine {
     @Override
     public void run() {
         running = true;
+        int pollIntervalMs = getPollIntervalMs();
         log.info("[Engine {}] Modbus TCP Engine started with pollInterval={}ms", 
-                config.getScaleId(), config.getPollInterval());
+            config.getScaleId(), pollIntervalMs);
         
         TcpParameters tcpParameters = new TcpParameters();
         
         try {
             // 1. Lấy thông tin kết nối từ config
-            String ip = getConnParam("ip");
-            Integer port = getConnParam("port");
+            String ip = getConnParamAsString("ip");
+            Integer port = getConnParamAsInt("port");
             
             if (ip == null || port == null) {
                 log.error("[Engine {}] Missing IP or Port in config", config.getScaleId());
@@ -92,7 +94,7 @@ public class ModbusTcpEngine implements ScaleEngine {
                             .build();
                     
                     // Lấy Unit ID (Slave ID)
-                    Integer unitId = getConnParam("unit_id");
+                    Integer unitId = getConnParamAsInt("unit_id");
                     if (unitId == null) {
                         unitId = 1; // Default Unit ID
                     }
@@ -130,7 +132,7 @@ public class ModbusTcpEngine implements ScaleEngine {
                 }
                 
                 // Nghỉ theo poll_interval
-                int pollInterval = config.getPollInterval();
+                int pollInterval = pollIntervalMs;
                 log.trace("[Engine {}] Sleeping for {}ms (pollInterval)", config.getScaleId(), pollInterval);
                 Thread.sleep(pollInterval);
             }
@@ -230,25 +232,64 @@ public class ModbusTcpEngine implements ScaleEngine {
         if (used == null) {
             used = dataConfig.get("is_used"); // Support cả 2 format
         }
-        return used != null && (Boolean) used;
+        return toBoolean(used);
+    }
+
+    private boolean toBoolean(Object value) {
+        if (value == null) return false;
+        if (value instanceof Boolean) return (Boolean) value;
+        if (value instanceof Number) return ((Number) value).intValue() != 0;
+        String s = value.toString().trim().toLowerCase(Locale.ROOT);
+        if (s.isEmpty()) return false;
+        return s.equals("true") || s.equals("1") || s.equals("yes") || s.equals("y");
+    }
+
+    private int getPollIntervalMs() {
+        Integer pollInterval = config.getPollInterval();
+        if (pollInterval == null || pollInterval <= 0) {
+            return 1000;
+        }
+        return pollInterval;
     }
     
     /**
      * Lấy tham số từ connParams (hỗ trợ cả Map và JsonNode)
      */
-    @SuppressWarnings("unchecked")
-    private <T> T getConnParam(String key) {
+    private String getConnParamAsString(String key) {
         Object connParams = config.getConnParams();
         if (connParams instanceof Map) {
-            return (T) ((Map<?, ?>) connParams).get(key);
+            Object value = ((Map<?, ?>) connParams).get(key);
+            return value != null ? value.toString() : null;
         } else if (connParams instanceof JsonNode) {
             JsonNode node = ((JsonNode) connParams).get(key);
             if (node == null) return null;
-            if (node.isTextual()) return (T) node.asText();
-            if (node.isInt()) return (T) Integer.valueOf(node.asInt());
-            return (T) node;
+            if (node.isTextual()) return node.asText();
+            if (node.isNumber()) return node.asText();
+            return node.toString();
         }
         return null;
+    }
+
+    private Integer getConnParamAsInt(String key) {
+        Object connParams = config.getConnParams();
+        Object value = null;
+        if (connParams instanceof Map) {
+            value = ((Map<?, ?>) connParams).get(key);
+        } else if (connParams instanceof JsonNode) {
+            JsonNode node = ((JsonNode) connParams).get(key);
+            if (node == null) return null;
+            if (node.isInt() || node.isLong() || node.isShort()) return node.asInt();
+            if (node.isNumber()) return node.asInt();
+            if (node.isTextual()) value = node.asText();
+            else return null;
+        }
+        if (value == null) return null;
+        if (value instanceof Number) return ((Number) value).intValue();
+        try {
+            return Integer.parseInt(value.toString().trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
     
     /**

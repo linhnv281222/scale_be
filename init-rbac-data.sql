@@ -1,0 +1,3 @@
+-- Intentionally minimal seed script.
+-- RBAC data is initialized by the application via DataInitializer.
+-- This file exists to satisfy docker-compose volume mounts.

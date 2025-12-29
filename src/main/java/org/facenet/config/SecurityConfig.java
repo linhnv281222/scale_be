@@ -135,8 +135,13 @@ public class SecurityConfig {
                         // H2 Console
                         .requestMatchers("/h2-console/**").permitAll()
 
-                        // Actuator
-                        .requestMatchers("/actuator/**").permitAll()
+                        // Actuator (healthcheck only)
+                        .requestMatchers(
+                                "/actuator/health",
+                                "/actuator/info",
+                                "/api/v1/actuator/health",
+                                "/api/v1/actuator/info"
+                        ).permitAll()
 
                         // Everything else requires authentication
                         .anyRequest().authenticated()

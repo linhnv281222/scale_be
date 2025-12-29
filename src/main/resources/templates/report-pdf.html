@@ -209,12 +209,12 @@
                 <th style="width: 10%;">Mã trạm</th>
                 <th style="width: 15%;">Tên trạm</th>
                 <th style="width: 12%;">Vị trí</th>
-                <th style="width: 10%;" th:text="${report.data1Name != null ? report.data1Name : 'Khối lượng (kg)'}">Khối lượng (kg)</th>
-                <th style="width: 10%;" th:text="${report.data2Name != null ? report.data2Name : 'Nhiệt độ (°C)'}">Nhiệt độ (°C)</th>
-                <th style="width: 10%;" th:text="${report.data3Name != null ? report.data3Name : 'Độ ẩm (%)'}">Độ ẩm (%)</th>
-                <th style="width: 10%;" th:text="${report.data4Name != null ? report.data4Name : 'Áp suất (hPa)'}">Áp suất (hPa)</th>
-                <th style="width: 10%;" th:text="${report.data5Name != null ? report.data5Name : 'Tốc độ (m/s)'}">Tốc độ (m/s)</th>
-                <th style="width: 8%;">Số lần cân</th>
+                <th style="width: 10%;" th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}" th:text="${report.data1Name}"></th>
+                <th style="width: 10%;" th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}" th:text="${report.data2Name}"></th>
+                <th style="width: 10%;" th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}" th:text="${report.data3Name}"></th>
+                <th style="width: 10%;" th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}" th:text="${report.data4Name}"></th>
+                <th style="width: 10%;" th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}" th:text="${report.data5Name}"></th>
+                <th style="width: 8%;">Kỳ</th>
             </tr>
         </thead>
         <tbody>
@@ -223,12 +223,12 @@
                 <td th:text="${row.scaleCode != null ? row.scaleCode : ''}">SCALE-1</td>
                 <td class="text-left" th:text="${row.scaleName != null ? row.scaleName : ''}">Trạm cân 1</td>
                 <td class="text-left" th:text="${row.location != null ? row.location : 'N/A'}">Xưởng A</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(row.data1Total)}">1,250.50</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(row.data2Total)}">980.00</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(row.data3Total)}">750.25</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(row.data4Total)}">620.75</td>
-                <td class="number" th:text="${dataFormatter.formatNumber(row.data5Total)}">450.00</td>
-                <td th:text="${row.recordCount}">125</td>
+                <td class="number" th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}" th:text="${dataFormatter.formatNumber(row.data1Total)}">1,250.50</td>
+                <td class="number" th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}" th:text="${dataFormatter.formatNumber(row.data2Total)}">980.00</td>
+                <td class="number" th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}" th:text="${dataFormatter.formatNumber(row.data3Total)}">750.25</td>
+                <td class="number" th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}" th:text="${dataFormatter.formatNumber(row.data4Total)}">620.75</td>
+                <td class="number" th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}" th:text="${dataFormatter.formatNumber(row.data5Total)}">450.00</td>
+                <td th:text="${row.period != null ? row.period : ''}"></td>
             </tr>
         </tbody>
     </table>
@@ -243,29 +243,65 @@
                 <td>Tổng số bản ghi:</td>
                 <td class="number" th:text="${report.summary.totalRecords}">1,250</td>
             </tr>
-            <tr>
-                <td th:text="'Tổng ' + ${report.data1Name != null ? report.data1Name : 'Khối lượng'} + ':'">Tổng Khối lượng:</td>
+            <tr th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}">
+                <td th:text="'Tổng ' + report.data1Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1GrandTotal)}">12,505.00</td>
-                <td th:text="'Trung bình ' + ${report.data1Name != null ? report.data1Name : 'Khối lượng'} + ':'">Trung bình Khối lượng:</td>
+                <td th:text="'Trung bình ' + report.data1Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Average)}">1,250.50</td>
             </tr>
-            <tr>
-                <td th:text="'Tổng ' + ${report.data2Name != null ? report.data2Name : 'Nhiệt độ'} + ':'">Tổng Nhiệt độ:</td>
+            <tr th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}">
+                <td th:text="'Tổng ' + report.data2Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2GrandTotal)}">9,800.00</td>
-                <td th:text="'Trung bình ' + ${report.data2Name != null ? report.data2Name : 'Nhiệt độ'} + ':'">Trung bình Nhiệt độ:</td>
+                <td th:text="'Trung bình ' + report.data2Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Average)}">980.00</td>
             </tr>
-            <tr>
-                <td th:text="'Tổng ' + ${report.data3Name != null ? report.data3Name : 'Độ ẩm'} + ':'">Tổng Độ ẩm:</td>
+            <tr th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}">
+                <td th:text="'Tổng ' + report.data3Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3GrandTotal)}">7,502.50</td>
-                <td th:text="'Trung bình ' + ${report.data3Name != null ? report.data3Name : 'Độ ẩm'} + ':'">Trung bình Độ ẩm:</td>
+                <td th:text="'Trung bình ' + report.data3Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3Average)}">750.25</td>
             </tr>
-            <tr>
-                <td th:text="'Giá trị lớn nhất ' + ${report.data1Name != null ? report.data1Name : 'Khối lượng'} + ':'">Giá trị lớn nhất Khối lượng:</td>
+            <tr th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}">
+                <td th:text="'Tổng ' + report.data4Name + ':'"></td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data4GrandTotal)}"></td>
+                <td th:text="'Trung bình ' + report.data4Name + ':'"></td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data4Average)}"></td>
+            </tr>
+            <tr th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}">
+                <td th:text="'Tổng ' + report.data5Name + ':'"></td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data5GrandTotal)}"></td>
+                <td th:text="'Trung bình ' + report.data5Name + ':'"></td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data5Average)}"></td>
+            </tr>
+            <tr th:if="${report.data1Name != null and !#strings.isEmpty(report.data1Name)}">
+                <td th:text="'Giá trị lớn nhất ' + report.data1Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data1Max)}">2,500.00</td>
-                <td th:text="'Giá trị lớn nhất ' + ${report.data2Name != null ? report.data2Name : 'Nhiệt độ'} + ':'">Giá trị lớn nhất Nhiệt độ:</td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr th:if="${report.data2Name != null and !#strings.isEmpty(report.data2Name)}">
+                <td th:text="'Giá trị lớn nhất ' + report.data2Name + ':'"></td>
                 <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data2Max)}">1,800.00</td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr th:if="${report.data3Name != null and !#strings.isEmpty(report.data3Name)}">
+                <td th:text="'Giá trị lớn nhất ' + report.data3Name + ':'"></td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data3Max)}"></td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr th:if="${report.data4Name != null and !#strings.isEmpty(report.data4Name)}">
+                <td th:text="'Giá trị lớn nhất ' + report.data4Name + ':'"></td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data4Max)}"></td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr th:if="${report.data5Name != null and !#strings.isEmpty(report.data5Name)}">
+                <td th:text="'Giá trị lớn nhất ' + report.data5Name + ':'"></td>
+                <td class="number" th:text="${dataFormatter.formatNumber(report.summary.data5Max)}"></td>
+                <td></td>
+                <td></td>
             </tr>
         </table>
     </div>

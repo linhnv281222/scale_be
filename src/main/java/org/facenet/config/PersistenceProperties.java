@@ -35,6 +35,13 @@ public class PersistenceProperties {
          * Default: 500ms
          */
         private long timeoutMs = 500;
+
+        /**
+         * Capacity of the internal batch queue.
+         * Bounded to prevent OOM when database is slow/down.
+         * Default: 100000
+         */
+        private int queueCapacity = 100000;
     }
 
     @Data

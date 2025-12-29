@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 
 /**
  * Implementation of PersistenceService
@@ -31,6 +32,12 @@ public class PersistenceServiceImpl implements PersistenceService {
     @Override
     @Transactional
     public void persistMeasurement(MeasurementEvent event) {
+        if (event == null) {
+            log.warn("[PERSISTENCE] Received null MeasurementEvent, skipping");
+            return;
+        }
+
+        Long scaleId = event.getScaleId();
         try {
             // Update current state (upsert)
             updateCurrentState(event);
@@ -38,9 +45,9 @@ public class PersistenceServiceImpl implements PersistenceService {
             // Insert historical log
             insertWeighingLog(event);
 
-            log.debug("[PERSISTENCE] Successfully persisted measurement for scale {}", event.getScaleId());
+            log.debug("[PERSISTENCE] Successfully persisted measurement for scale {}", scaleId);
         } catch (Exception e) {
-            log.error("[PERSISTENCE] Error persisting measurement for scale {}: {}", event.getScaleId(), e.getMessage(), e);
+            log.error("[PERSISTENCE] Error persisting measurement for scale {}: {}", scaleId, e.getMessage(), e);
             // Write to dead letter file
             deadLetterService.writeDeadLetter(event, e);
             // Re-throw to let batch service handle
@@ -52,6 +59,12 @@ public class PersistenceServiceImpl implements PersistenceService {
      * Update or insert current state for the scale
      */
     private void updateCurrentState(MeasurementEvent event) {
+        if (event.getScaleId() == null) {
+            throw new IllegalArgumentException("MeasurementEvent.scaleId must not be null");
+        }
+
+        ZonedDateTime lastTime = event.getLastTime() != null ? event.getLastTime() : ZonedDateTime.now();
+
         Scale scale = scaleRepository.findById(event.getScaleId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Scale not found with id: " + event.getScaleId()));
@@ -71,7 +84,7 @@ public class PersistenceServiceImpl implements PersistenceService {
         currentState.setData4(event.getData4() != null ? event.getData4().getValue() : null);
         currentState.setData5(event.getData5() != null ? event.getData5().getValue() : null);
         currentState.setStatus(event.getStatus());
-        currentState.setLastTime(event.getLastTime().toOffsetDateTime());
+        currentState.setLastTime(lastTime.toOffsetDateTime());
 
         // Set audit fields for system operation
         currentState.setCreatedBy("engine_modbus");
@@ -84,10 +97,16 @@ public class PersistenceServiceImpl implements PersistenceService {
      * Insert new weighing log entry
      */
     private void insertWeighingLog(MeasurementEvent event) {
+        if (event.getScaleId() == null) {
+            throw new IllegalArgumentException("MeasurementEvent.scaleId must not be null");
+        }
+
+        ZonedDateTime lastTime = event.getLastTime() != null ? event.getLastTime() : ZonedDateTime.now();
+
         WeighingLog log = WeighingLog.builder()
                 .scaleId(event.getScaleId())
                 .createdAt(OffsetDateTime.now()) // Set createdAt explicitly for composite key
-                .lastTime(event.getLastTime().toOffsetDateTime())
+                .lastTime(lastTime.toOffsetDateTime())
                 .data1(event.getData1() != null ? event.getData1().getValue() : null)
                 .data2(event.getData2() != null ? event.getData2().getValue() : null)
                 .data3(event.getData3() != null ? event.getData3().getValue() : null)

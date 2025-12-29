@@ -228,7 +228,9 @@ public class WordExportService {
                 String.valueOf(summary.getTotalRecords() != null ? summary.getTotalRecords() : 0));
         
         // Row 4: Calculation method
-        setMetaCell(metaTable.getRow(3).getCell(0), "Phương pháp tính:", "Tổng hợp (SUM)");
+        Object aggLabelObj = reportData.getMetadata() != null ? reportData.getMetadata().get("aggregationMethodLabel") : null;
+        String aggLabel = aggLabelObj != null ? aggLabelObj.toString() : "";
+        setMetaCell(metaTable.getRow(3).getCell(0), "Phương pháp tính:", aggLabel);
         setMetaCell(metaTable.getRow(3).getCell(1), "", "");
         
         // Add spacing
@@ -259,34 +261,40 @@ public class WordExportService {
      * Create main data table with header, data rows, and zebra striping
      */
     private void createDataTable(XWPFDocument document, ReportData reportData) {
-        // Get column names from reportData (already loaded from scale_configs)
-        String[] colNames = {
-            "STT",
-            "Mã trạm",
-            "Tên trạm",
-            "Vị trí",
-            reportData.getData1Name() != null ? reportData.getData1Name() : "Khối lượng (kg)",
-            reportData.getData2Name() != null ? reportData.getData2Name() : "Nhiệt độ (°C)",
-            reportData.getData3Name() != null ? reportData.getData3Name() : "Độ ẩm (%)",
-            reportData.getData4Name() != null ? reportData.getData4Name() : "Áp suất (hPa)",
-            reportData.getData5Name() != null ? reportData.getData5Name() : "Tốc độ (m/s)",
-            "Số lần cân"
-        };
-        
+        List<Integer> activeDataIndexes = getActiveDataIndexes(reportData);
+
+        List<String> colNames = new ArrayList<>();
+        colNames.add("STT");
+        colNames.add("Mã trạm");
+        colNames.add("Tên trạm");
+        colNames.add("Vị trí");
+        for (Integer idx : activeDataIndexes) {
+            colNames.add(getDataName(reportData, idx));
+        }
+        colNames.add("Kỳ");
+
         int numRows = reportData.getRows().size() + 2; // +1 header, +1 summary
-        int numCols = colNames.length;
-        
+        int numCols = colNames.size();
+
         XWPFTable table = document.createTable(numRows, numCols);
         table.setWidth("100%");
         
         // Column widths (in twips, total ~9638 for A4 with 2cm margins)
-        int[] colWidths = {600, 900, 1400, 1200, 900, 900, 900, 900, 900, 800};
+        List<Integer> colWidths = new ArrayList<>();
+        colWidths.add(600);
+        colWidths.add(900);
+        colWidths.add(1400);
+        colWidths.add(1200);
+        for (int i = 0; i < activeDataIndexes.size(); i++) {
+            colWidths.add(900);
+        }
+        colWidths.add(800);
         
         // ===== HEADER ROW =====
         XWPFTableRow headerRow = table.getRow(0);
         for (int i = 0; i < numCols; i++) {
             XWPFTableCell cell = headerRow.getCell(i);
-            setHeaderCellStyle(cell, colNames[i], colWidths[i]);
+            setHeaderCellStyle(cell, colNames.get(i), colWidths.get(i));
         }
         
         // ===== DATA ROWS =====
@@ -294,17 +302,18 @@ public class WordExportService {
         for (ReportData.ReportRow rowData : reportData.getRows()) {
             XWPFTableRow row = table.getRow(rowIdx);
             boolean isOddRow = (rowIdx % 2 == 1);
-            
-            setDataCell(row.getCell(0), String.valueOf(rowData.getRowNumber()), isOddRow, true);
-            setDataCell(row.getCell(1), rowData.getScaleCode() != null ? rowData.getScaleCode() : "", isOddRow, true);
-            setDataCell(row.getCell(2), rowData.getScaleName() != null ? rowData.getScaleName() : "", isOddRow, false);
-            setDataCell(row.getCell(3), rowData.getLocation() != null ? rowData.getLocation() : "N/A", isOddRow, false);
-            setDataCell(row.getCell(4), formatNumber(rowData.getData1Total()), isOddRow, true);
-            setDataCell(row.getCell(5), formatNumber(rowData.getData2Total()), isOddRow, true);
-            setDataCell(row.getCell(6), formatNumber(rowData.getData3Total()), isOddRow, true);
-            setDataCell(row.getCell(7), formatNumber(rowData.getData4Total()), isOddRow, true);
-            setDataCell(row.getCell(8), formatNumber(rowData.getData5Total()), isOddRow, true);
-            setDataCell(row.getCell(9), String.valueOf(rowData.getRecordCount() != null ? rowData.getRecordCount() : 0), isOddRow, true);
+
+            int col = 0;
+            setDataCell(row.getCell(col++), String.valueOf(rowData.getRowNumber()), isOddRow, true);
+            setDataCell(row.getCell(col++), rowData.getScaleCode() != null ? rowData.getScaleCode() : "", isOddRow, true);
+            setDataCell(row.getCell(col++), rowData.getScaleName() != null ? rowData.getScaleName() : "", isOddRow, false);
+            setDataCell(row.getCell(col++), rowData.getLocation() != null ? rowData.getLocation() : "N/A", isOddRow, false);
+
+            for (Integer idx : activeDataIndexes) {
+                setDataCell(row.getCell(col++), formatNumber(getRowDataTotal(rowData, idx)), isOddRow, true);
+            }
+
+            setDataCell(row.getCell(col), rowData.getPeriod() != null ? rowData.getPeriod() : "", isOddRow, true);
             
             rowIdx++;
         }
@@ -312,20 +321,114 @@ public class WordExportService {
         // ===== SUMMARY ROW (TỔNG CỘNG) =====
         XWPFTableRow summaryRow = table.getRow(rowIdx);
         ReportData.ReportSummary summary = reportData.getSummary();
-        
-        setSummaryCell(summaryRow.getCell(0), "TỔNG CỘNG");
-        setSummaryCell(summaryRow.getCell(1), "");
-        setSummaryCell(summaryRow.getCell(2), "");
-        setSummaryCell(summaryRow.getCell(3), "");
-        setSummaryCell(summaryRow.getCell(4), formatNumber(summary.getData1GrandTotal()));
-        setSummaryCell(summaryRow.getCell(5), formatNumber(summary.getData2GrandTotal()));
-        setSummaryCell(summaryRow.getCell(6), formatNumber(summary.getData3GrandTotal()));
-        setSummaryCell(summaryRow.getCell(7), formatNumber(summary.getData4GrandTotal()));
-        setSummaryCell(summaryRow.getCell(8), formatNumber(summary.getData5GrandTotal()));
-        setSummaryCell(summaryRow.getCell(9), String.valueOf(summary.getTotalRecords() != null ? summary.getTotalRecords() : 0));
+
+        int col = 0;
+        setSummaryCell(summaryRow.getCell(col++), "TỔNG CỘNG");
+        setSummaryCell(summaryRow.getCell(col++), "");
+        setSummaryCell(summaryRow.getCell(col++), "");
+        setSummaryCell(summaryRow.getCell(col++), "");
+
+        for (Integer idx : activeDataIndexes) {
+            setSummaryCell(summaryRow.getCell(col++), formatNumber(getSummaryGrandTotal(summary, idx)));
+        }
+        setSummaryCell(summaryRow.getCell(col), "");
         
         // Add spacing after table
         document.createParagraph().setSpacingAfter(400);
+    }
+
+    private static List<Integer> getActiveDataIndexes(ReportData reportData) {
+        List<Integer> indexes = new ArrayList<>();
+        if (reportData == null) {
+            return indexes;
+        }
+        if (hasText(reportData.getData1Name())) {
+            indexes.add(1);
+        }
+        if (hasText(reportData.getData2Name())) {
+            indexes.add(2);
+        }
+        if (hasText(reportData.getData3Name())) {
+            indexes.add(3);
+        }
+        if (hasText(reportData.getData4Name())) {
+            indexes.add(4);
+        }
+        if (hasText(reportData.getData5Name())) {
+            indexes.add(5);
+        }
+        return indexes;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private static String getDataName(ReportData reportData, int idx) {
+        return switch (idx) {
+            case 1 -> reportData.getData1Name();
+            case 2 -> reportData.getData2Name();
+            case 3 -> reportData.getData3Name();
+            case 4 -> reportData.getData4Name();
+            case 5 -> reportData.getData5Name();
+            default -> "";
+        };
+    }
+
+    private static Double getRowDataTotal(ReportData.ReportRow row, int idx) {
+        if (row == null) {
+            return null;
+        }
+        return switch (idx) {
+            case 1 -> row.getData1Total();
+            case 2 -> row.getData2Total();
+            case 3 -> row.getData3Total();
+            case 4 -> row.getData4Total();
+            case 5 -> row.getData5Total();
+            default -> null;
+        };
+    }
+
+    private static Double getSummaryGrandTotal(ReportData.ReportSummary summary, int idx) {
+        if (summary == null) {
+            return null;
+        }
+        return switch (idx) {
+            case 1 -> summary.getData1GrandTotal();
+            case 2 -> summary.getData2GrandTotal();
+            case 3 -> summary.getData3GrandTotal();
+            case 4 -> summary.getData4GrandTotal();
+            case 5 -> summary.getData5GrandTotal();
+            default -> null;
+        };
+    }
+
+    private static Double getSummaryAverage(ReportData.ReportSummary summary, int idx) {
+        if (summary == null) {
+            return null;
+        }
+        return switch (idx) {
+            case 1 -> summary.getData1Average();
+            case 2 -> summary.getData2Average();
+            case 3 -> summary.getData3Average();
+            case 4 -> summary.getData4Average();
+            case 5 -> summary.getData5Average();
+            default -> null;
+        };
+    }
+
+    private static Double getSummaryMax(ReportData.ReportSummary summary, int idx) {
+        if (summary == null) {
+            return null;
+        }
+        return switch (idx) {
+            case 1 -> summary.getData1Max();
+            case 2 -> summary.getData2Max();
+            case 3 -> summary.getData3Max();
+            case 4 -> summary.getData4Max();
+            case 5 -> summary.getData5Max();
+            default -> null;
+        };
     }
     
     private void setHeaderCellStyle(XWPFTableCell cell, String text, int width) {
@@ -400,6 +503,12 @@ public class WordExportService {
      */
     private void createSummarySection(XWPFDocument document, ReportData reportData) {
         ReportData.ReportSummary summary = reportData.getSummary();
+
+        List<Integer> activeDataIndexes = getActiveDataIndexes(reportData);
+        if (activeDataIndexes.isEmpty()) {
+            document.createParagraph().setSpacingAfter(400);
+            return;
+        }
         
         // Title
         XWPFParagraph titlePara = document.createParagraph();
@@ -411,32 +520,29 @@ public class WordExportService {
         titleRun.setFontSize(HEADER_FONT_SIZE);
         
         // Statistics table
-        XWPFTable statsTable = document.createTable(3, 6);
+        XWPFTable statsTable = document.createTable(3, 1 + activeDataIndexes.size());
         statsTable.setWidth("100%");
         
         // Row 1: Labels
         setStatsHeaderCell(statsTable.getRow(0).getCell(0), "Thống kê");
-        setStatsHeaderCell(statsTable.getRow(0).getCell(1), reportData.getData1Name() != null ? reportData.getData1Name() : "Data 1");
-        setStatsHeaderCell(statsTable.getRow(0).getCell(2), reportData.getData2Name() != null ? reportData.getData2Name() : "Data 2");
-        setStatsHeaderCell(statsTable.getRow(0).getCell(3), reportData.getData3Name() != null ? reportData.getData3Name() : "Data 3");
-        setStatsHeaderCell(statsTable.getRow(0).getCell(4), reportData.getData4Name() != null ? reportData.getData4Name() : "Data 4");
-        setStatsHeaderCell(statsTable.getRow(0).getCell(5), reportData.getData5Name() != null ? reportData.getData5Name() : "Data 5");
+        int colIdx = 1;
+        for (Integer idx : activeDataIndexes) {
+            setStatsHeaderCell(statsTable.getRow(0).getCell(colIdx++), getDataName(reportData, idx));
+        }
         
         // Row 2: Averages
         setStatsCell(statsTable.getRow(1).getCell(0), "Trung bình", true);
-        setStatsCell(statsTable.getRow(1).getCell(1), formatNumber(summary.getData1Average()), false);
-        setStatsCell(statsTable.getRow(1).getCell(2), formatNumber(summary.getData2Average()), false);
-        setStatsCell(statsTable.getRow(1).getCell(3), formatNumber(summary.getData3Average()), false);
-        setStatsCell(statsTable.getRow(1).getCell(4), formatNumber(summary.getData4Average()), false);
-        setStatsCell(statsTable.getRow(1).getCell(5), formatNumber(summary.getData5Average()), false);
+        colIdx = 1;
+        for (Integer idx : activeDataIndexes) {
+            setStatsCell(statsTable.getRow(1).getCell(colIdx++), formatNumber(getSummaryAverage(summary, idx)), false);
+        }
         
         // Row 3: Max
         setStatsCell(statsTable.getRow(2).getCell(0), "Giá trị lớn nhất", true);
-        setStatsCell(statsTable.getRow(2).getCell(1), formatNumber(summary.getData1Max()), false);
-        setStatsCell(statsTable.getRow(2).getCell(2), formatNumber(summary.getData2Max()), false);
-        setStatsCell(statsTable.getRow(2).getCell(3), formatNumber(summary.getData3Max()), false);
-        setStatsCell(statsTable.getRow(2).getCell(4), formatNumber(summary.getData4Max()), false);
-        setStatsCell(statsTable.getRow(2).getCell(5), formatNumber(summary.getData5Max()), false);
+        colIdx = 1;
+        for (Integer idx : activeDataIndexes) {
+            setStatsCell(statsTable.getRow(2).getCell(colIdx++), formatNumber(getSummaryMax(summary, idx)), false);
+        }
         
         document.createParagraph().setSpacingAfter(400);
     }
@@ -584,11 +690,11 @@ public class WordExportService {
         model.put("endDate", DATE_FORMATTER.format(reportData.getEndTime()));
         
         // Column names
-        model.put("data1Name", reportData.getData1Name() != null ? reportData.getData1Name() : "Data 1");
-        model.put("data2Name", reportData.getData2Name() != null ? reportData.getData2Name() : "Data 2");
-        model.put("data3Name", reportData.getData3Name() != null ? reportData.getData3Name() : "Data 3");
-        model.put("data4Name", reportData.getData4Name() != null ? reportData.getData4Name() : "Data 4");
-        model.put("data5Name", reportData.getData5Name() != null ? reportData.getData5Name() : "Data 5");
+        model.put("data1Name", reportData.getData1Name());
+        model.put("data2Name", reportData.getData2Name());
+        model.put("data3Name", reportData.getData3Name());
+        model.put("data4Name", reportData.getData4Name());
+        model.put("data5Name", reportData.getData5Name());
         
         // Statistics
         ReportData.ReportSummary summary = reportData.getSummary();
@@ -616,7 +722,9 @@ public class WordExportService {
             rowMap.put("data3Total", formatNumber(row.getData3Total()));
             rowMap.put("data4Total", formatNumber(row.getData4Total()));
             rowMap.put("data5Total", formatNumber(row.getData5Total()));
-            rowMap.put("recordCount", row.getRecordCount() != null ? row.getRecordCount() : 0);
+            rowMap.put("period", row.getPeriod() != null ? row.getPeriod() : "");
+            // Back-compat with existing templates expecting recordCount column
+            rowMap.put("recordCount", row.getPeriod() != null ? row.getPeriod() : "");
             rows.add(rowMap);
         }
         model.put("rows", rows);

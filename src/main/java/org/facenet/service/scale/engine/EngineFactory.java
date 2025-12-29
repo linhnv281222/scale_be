@@ -27,7 +27,15 @@ public class EngineFactory {
      * @throws IllegalArgumentException nếu protocol không được hỗ trợ
      */
     public static ScaleEngine createEngine(ScaleConfig config, BlockingQueue<MeasurementEvent> queue) {
-        String protocol = config.getProtocol().toUpperCase();
+        if (config == null) {
+            throw new IllegalArgumentException("ScaleConfig must not be null");
+        }
+        String rawProtocol = config.getProtocol();
+        if (rawProtocol == null || rawProtocol.trim().isEmpty()) {
+            throw new IllegalArgumentException("Missing protocol for scale " + config.getScaleId());
+        }
+
+        String protocol = rawProtocol.trim().toUpperCase(java.util.Locale.ROOT);
         
         log.debug("Creating engine for scale {} with protocol {}", config.getScaleId(), protocol);
         

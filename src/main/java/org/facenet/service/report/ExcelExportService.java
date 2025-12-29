@@ -17,9 +17,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Service for exporting reports to Excel format
@@ -57,6 +59,11 @@ public class ExcelExportService {
     public byte[] exportToExcel(ReportData reportData, ReportTemplate template) throws IOException {
         log.info("Exporting report to Excel with template: {} (ENTERPRISE_STANDARD layout)", template.getCode());
 
+        List<ReportColumn> visibleColumns = getVisibleColumns(template, reportData);
+        if (visibleColumns.isEmpty()) {
+            throw new IllegalStateException("Report template has no visible columns");
+        }
+
         // Use SXSSFWorkbook for streaming (keeps only 100 rows in memory)
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(100)) {
             Sheet sheet = workbook.createSheet("Báo cáo sản lượng");
@@ -78,15 +85,15 @@ public class ExcelExportService {
             rowIndex += ReportLayoutConstants.ENTERPRISE_STANDARD.SPACING_AFTER_HEADER;
 
             // 4. Data Table with Headers
-            rowIndex = createColumnHeaders(sheet, styles.headerStyle, rowIndex, template);
-            rowIndex = createDataRows(sheet, reportData, template, styles, rowIndex);
+            rowIndex = createColumnHeaders(sheet, styles.headerStyle, rowIndex, visibleColumns, reportData);
+            rowIndex = createDataRows(sheet, reportData, visibleColumns, styles, rowIndex);
 
             // 5. Spacing after table
             rowIndex += ReportLayoutConstants.ENTERPRISE_STANDARD.SPACING_AFTER_TABLE;
 
             // 6. Summary Section
             if (ReportLayoutConstants.ENTERPRISE_STANDARD.FOOTER_SHOW_SUMMARY) {
-                rowIndex = createSummary(sheet, reportData, styles, rowIndex);
+                rowIndex = createSummary(sheet, reportData, visibleColumns, styles, rowIndex);
             }
 
             // 7. Signature Block
@@ -96,7 +103,7 @@ public class ExcelExportService {
             }
 
             // Set column widths based on template
-            setColumnWidths(sheet, template);
+            setColumnWidths(sheet, visibleColumns);
 
             // Write to byte array
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -238,21 +245,18 @@ public class ExcelExportService {
     /**
      * Create column headers (dynamic from template)
      */
-    private int createColumnHeaders(Sheet sheet, CellStyle headerStyle, int startRow, ReportTemplate template) {
+    private int createColumnHeaders(Sheet sheet, CellStyle headerStyle, int startRow, List<ReportColumn> columns, ReportData reportData) {
         Row headerRow = sheet.createRow(startRow);
-        
-        // Get sorted columns
-        List<ReportColumn> columns = template.getColumns();
-        columns.sort(Comparator.comparingInt(ReportColumn::getColumnOrder));
-        
+
         for (int i = 0; i < columns.size(); i++) {
             ReportColumn column = columns.get(i);
             Cell cell = headerRow.createCell(i);
-            cell.setCellValue(column.getColumnLabel());
+            cell.setCellValue(resolveColumnLabel(column, reportData));
             cell.setCellStyle(headerStyle);
             
             // Set column width (POI max is 255 characters = 65280 units)
-            int width = Math.min(column.getWidth() * 50, 65280);
+            Integer colWidth = column.getWidth();
+            int width = Math.min((colWidth != null ? colWidth : 15) * 50, 65280);
             sheet.setColumnWidth(i, width);
         }
 
@@ -262,13 +266,9 @@ public class ExcelExportService {
     /**
      * Create data rows with zebra striping (ENTERPRISE_STANDARD specification)
      */
-    private int createDataRows(Sheet sheet, ReportData reportData, ReportTemplate template,
+    private int createDataRows(Sheet sheet, ReportData reportData, List<ReportColumn> columns,
                                StyleSet styles, int startRow) {
         int rowIndex = startRow;
-        
-        // Get sorted columns
-        List<ReportColumn> columns = template.getColumns();
-        columns.sort(Comparator.comparingInt(ReportColumn::getColumnOrder));
 
         boolean useZebraStriping = ReportLayoutConstants.ENTERPRISE_STANDARD.TABLE_ZEBRA_STRIPING;
         
@@ -360,18 +360,74 @@ public class ExcelExportService {
             case "data_3" -> row.getData3Total();
             case "data_4" -> row.getData4Total();
             case "data_5" -> row.getData5Total();
-            case "record_count" -> row.getRecordCount();
+            case "record_count" -> row.getPeriod();
             case "last_time" -> row.getLastTime();
             default -> "";
         };
     }
 
+    private static List<ReportColumn> getVisibleColumns(ReportTemplate template, ReportData reportData) {
+        List<ReportColumn> sorted = new ArrayList<>(template.getColumns() != null ? template.getColumns() : List.of());
+        sorted.sort(Comparator.comparingInt(ReportColumn::getColumnOrder));
+
+        List<ReportColumn> visible = new ArrayList<>(sorted.size());
+        for (ReportColumn column : sorted) {
+            if (column == null) {
+                continue;
+            }
+            String dataField = column.getDataField();
+            if (Objects.equals(dataField, "data_1") && !hasText(reportData.getData1Name())) {
+                continue;
+            }
+            if (Objects.equals(dataField, "data_2") && !hasText(reportData.getData2Name())) {
+                continue;
+            }
+            if (Objects.equals(dataField, "data_3") && !hasText(reportData.getData3Name())) {
+                continue;
+            }
+            if (Objects.equals(dataField, "data_4") && !hasText(reportData.getData4Name())) {
+                continue;
+            }
+            if (Objects.equals(dataField, "data_5") && !hasText(reportData.getData5Name())) {
+                continue;
+            }
+            visible.add(column);
+        }
+        return visible;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private static String resolveColumnLabel(ReportColumn column, ReportData reportData) {
+        String dataField = column != null ? column.getDataField() : null;
+        if (Objects.equals(dataField, "data_1")) {
+            return reportData.getData1Name();
+        }
+        if (Objects.equals(dataField, "data_2")) {
+            return reportData.getData2Name();
+        }
+        if (Objects.equals(dataField, "data_3")) {
+            return reportData.getData3Name();
+        }
+        if (Objects.equals(dataField, "data_4")) {
+            return reportData.getData4Name();
+        }
+        if (Objects.equals(dataField, "data_5")) {
+            return reportData.getData5Name();
+        }
+        return column != null ? column.getColumnLabel() : "";
+    }
+
     /**
      * Create summary section with ENTERPRISE_STANDARD styling
      */
-    private int createSummary(Sheet sheet, ReportData reportData, StyleSet styles, int startRow) {
+    private int createSummary(Sheet sheet, ReportData reportData, List<ReportColumn> columns, StyleSet styles, int startRow) {
         ReportData.ReportSummary summary = reportData.getSummary();
         int rowIndex = startRow;
+
+        int labelMergeEnd = findLabelMergeEnd(columns);
 
         // Total row
         Row totalRow = sheet.createRow(rowIndex++);
@@ -379,17 +435,15 @@ public class ExcelExportService {
         Cell totalLabelCell = totalRow.createCell(0);
         totalLabelCell.setCellValue("TỔNG CỘNG");
         totalLabelCell.setCellStyle(styles.summaryStyle);
-        sheet.addMergedRegion(new CellRangeAddress(totalRow.getRowNum(), totalRow.getRowNum(), 0, 3));
 
-        createNumberCell(totalRow, 4, summary.getData1GrandTotal(), styles.summaryStyle);
-        createNumberCell(totalRow, 5, summary.getData2GrandTotal(), styles.summaryStyle);
-        createNumberCell(totalRow, 6, summary.getData3GrandTotal(), styles.summaryStyle);
-        createNumberCell(totalRow, 7, summary.getData4GrandTotal(), styles.summaryStyle);
-        createNumberCell(totalRow, 8, summary.getData5GrandTotal(), styles.summaryStyle);
-
-        Cell totalRecordsCell = totalRow.createCell(9);
-        totalRecordsCell.setCellValue(summary.getTotalRecords() != null ? summary.getTotalRecords() : 0);
-        totalRecordsCell.setCellStyle(styles.summaryStyle);
+        for (int i = 1; i < columns.size(); i++) {
+            Cell cell = totalRow.createCell(i);
+            cell.setCellStyle(styles.summaryStyle);
+        }
+        if (labelMergeEnd > 0) {
+            sheet.addMergedRegion(new CellRangeAddress(totalRow.getRowNum(), totalRow.getRowNum(), 0, labelMergeEnd));
+        }
+        fillSummaryMetricsRow(totalRow, columns, summary, SummaryMetric.GRAND_TOTAL, styles.summaryStyle);
 
         // Average row
         Row avgRow = sheet.createRow(rowIndex++);
@@ -397,13 +451,15 @@ public class ExcelExportService {
         Cell avgLabelCell = avgRow.createCell(0);
         avgLabelCell.setCellValue("TRUNG BÌNH");
         avgLabelCell.setCellStyle(styles.summaryStyle);
-        sheet.addMergedRegion(new CellRangeAddress(avgRow.getRowNum(), avgRow.getRowNum(), 0, 3));
 
-        createNumberCell(avgRow, 4, summary.getData1Average(), styles.summaryStyle);
-        createNumberCell(avgRow, 5, summary.getData2Average(), styles.summaryStyle);
-        createNumberCell(avgRow, 6, summary.getData3Average(), styles.summaryStyle);
-        createNumberCell(avgRow, 7, summary.getData4Average(), styles.summaryStyle);
-        createNumberCell(avgRow, 8, summary.getData5Average(), styles.summaryStyle);
+        for (int i = 1; i < columns.size(); i++) {
+            Cell cell = avgRow.createCell(i);
+            cell.setCellStyle(styles.summaryStyle);
+        }
+        if (labelMergeEnd > 0) {
+            sheet.addMergedRegion(new CellRangeAddress(avgRow.getRowNum(), avgRow.getRowNum(), 0, labelMergeEnd));
+        }
+        fillSummaryMetricsRow(avgRow, columns, summary, SummaryMetric.AVERAGE, styles.summaryStyle);
 
         // Max row
         Row maxRow = sheet.createRow(rowIndex++);
@@ -411,15 +467,82 @@ public class ExcelExportService {
         Cell maxLabelCell = maxRow.createCell(0);
         maxLabelCell.setCellValue("GIÁ TRỊ LỚN NHẤT");
         maxLabelCell.setCellStyle(styles.summaryStyle);
-        sheet.addMergedRegion(new CellRangeAddress(maxRow.getRowNum(), maxRow.getRowNum(), 0, 3));
 
-        createNumberCell(maxRow, 4, summary.getData1Max(), styles.summaryStyle);
-        createNumberCell(maxRow, 5, summary.getData2Max(), styles.summaryStyle);
-        createNumberCell(maxRow, 6, summary.getData3Max(), styles.summaryStyle);
-        createNumberCell(maxRow, 7, summary.getData4Max(), styles.summaryStyle);
-        createNumberCell(maxRow, 8, summary.getData5Max(), styles.summaryStyle);
+        for (int i = 1; i < columns.size(); i++) {
+            Cell cell = maxRow.createCell(i);
+            cell.setCellStyle(styles.summaryStyle);
+        }
+        if (labelMergeEnd > 0) {
+            sheet.addMergedRegion(new CellRangeAddress(maxRow.getRowNum(), maxRow.getRowNum(), 0, labelMergeEnd));
+        }
+        fillSummaryMetricsRow(maxRow, columns, summary, SummaryMetric.MAX, styles.summaryStyle);
 
         return rowIndex;
+    }
+
+    private enum SummaryMetric {
+        GRAND_TOTAL,
+        AVERAGE,
+        MAX
+    }
+
+    private static int findLabelMergeEnd(List<ReportColumn> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return 0;
+        }
+        int firstDataIndex = -1;
+        for (int i = 0; i < columns.size(); i++) {
+            String dataField = columns.get(i) != null ? columns.get(i).getDataField() : null;
+            if (dataField != null && dataField.startsWith("data_")) {
+                firstDataIndex = i;
+                break;
+            }
+        }
+        if (firstDataIndex <= 0) {
+            return Math.min(3, columns.size() - 1);
+        }
+        return firstDataIndex - 1;
+    }
+
+    private void fillSummaryMetricsRow(Row row, List<ReportColumn> columns, ReportData.ReportSummary summary,
+                                       SummaryMetric metric, CellStyle style) {
+        if (row == null || columns == null || summary == null) {
+            return;
+        }
+        for (int i = 0; i < columns.size(); i++) {
+            ReportColumn column = columns.get(i);
+            String dataField = column != null ? column.getDataField() : null;
+            if (dataField == null) {
+                continue;
+            }
+            if (Objects.equals(dataField, "record_count")) {
+                // record_count column is repurposed to show period (string), so summary is intentionally blank.
+                continue;
+            }
+            if (!dataField.startsWith("data_")) {
+                continue;
+            }
+
+            Double value = switch (dataField) {
+                case "data_1" -> metric == SummaryMetric.GRAND_TOTAL ? summary.getData1GrandTotal()
+                        : metric == SummaryMetric.AVERAGE ? summary.getData1Average()
+                        : summary.getData1Max();
+                case "data_2" -> metric == SummaryMetric.GRAND_TOTAL ? summary.getData2GrandTotal()
+                        : metric == SummaryMetric.AVERAGE ? summary.getData2Average()
+                        : summary.getData2Max();
+                case "data_3" -> metric == SummaryMetric.GRAND_TOTAL ? summary.getData3GrandTotal()
+                        : metric == SummaryMetric.AVERAGE ? summary.getData3Average()
+                        : summary.getData3Max();
+                case "data_4" -> metric == SummaryMetric.GRAND_TOTAL ? summary.getData4GrandTotal()
+                        : metric == SummaryMetric.AVERAGE ? summary.getData4Average()
+                        : summary.getData4Max();
+                case "data_5" -> metric == SummaryMetric.GRAND_TOTAL ? summary.getData5GrandTotal()
+                        : metric == SummaryMetric.AVERAGE ? summary.getData5Average()
+                        : summary.getData5Max();
+                default -> null;
+            };
+            createNumberCell(row, i, value, style);
+        }
     }
 
     /**
@@ -458,14 +581,15 @@ public class ExcelExportService {
     /**
      * Set column widths based on template
      */
-    private void setColumnWidths(Sheet sheet, ReportTemplate template) {
-        List<ReportColumn> columns = template.getColumns();
-        columns.sort(Comparator.comparingInt(ReportColumn::getColumnOrder));
+    private void setColumnWidths(Sheet sheet, List<ReportColumn> columns) {
+        List<ReportColumn> sorted = new ArrayList<>(columns != null ? columns : List.of());
+        sorted.sort(Comparator.comparingInt(ReportColumn::getColumnOrder));
         
-        for (int i = 0; i < columns.size(); i++) {
-            ReportColumn column = columns.get(i);
+        for (int i = 0; i < sorted.size(); i++) {
+            ReportColumn column = sorted.get(i);
             // POI uses 1/256th of character width (max 255 characters = 65280 units)
-            int width = Math.min(column.getWidth() * 256, 65280);
+            Integer colWidth = column.getWidth();
+            int width = Math.min((colWidth != null ? colWidth : 15) * 256, 65280);
             sheet.setColumnWidth(i, width);
         }
     }

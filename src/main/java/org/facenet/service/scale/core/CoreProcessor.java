@@ -3,6 +3,7 @@ package org.facenet.service.scale.core;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.facenet.config.DeviceEngineProperties;
 import org.facenet.event.MeasurementEvent;
 import org.facenet.service.scale.persistence.BatchPersistenceService;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -33,17 +34,20 @@ public class CoreProcessor {
     private final ExecutorService coreProcessingExecutor;
     private final SimpMessagingTemplate messagingTemplate;
     private final BatchPersistenceService batchPersistenceService;
+    private final DeviceEngineProperties deviceEngineProperties;
     private volatile boolean running = false;
     
     public CoreProcessor(
             @Qualifier("measurementEventQueue") BlockingQueue<MeasurementEvent> activeQueue,
             @Qualifier("coreProcessingExecutor") ExecutorService coreProcessingExecutor,
             SimpMessagingTemplate messagingTemplate,
-            BatchPersistenceService batchPersistenceService) {
+            BatchPersistenceService batchPersistenceService,
+            DeviceEngineProperties deviceEngineProperties) {
         this.activeQueue = activeQueue;
         this.coreProcessingExecutor = coreProcessingExecutor;
         this.messagingTemplate = messagingTemplate;
         this.batchPersistenceService = batchPersistenceService;
+        this.deviceEngineProperties = deviceEngineProperties;
     }
     
     /**
@@ -57,9 +61,8 @@ public class CoreProcessor {
         // Start batch persistence processing
         batchPersistenceService.startBatchProcessing();
         
-        // Lấy số worker threads từ executor
-        // Default: 4-8 workers theo design spec
-        int numWorkers = 4; // Có thể config từ properties
+        // Align worker threads with configured pool size
+        int numWorkers = Math.max(1, deviceEngineProperties.getWorkerThreads());
         
         for (int i = 0; i < numWorkers; i++) {
             final int workerId = i + 1;
@@ -129,38 +132,42 @@ public class CoreProcessor {
      * V1: Log measurement event để kiểm tra luồng dữ liệu
      */
     private void logMeasurementEvent(int workerId, MeasurementEvent event) {
-        log.info("=====================================");
-        log.info("[CORE-Worker-{}] Received measurement from Scale ID: {}", workerId, event.getScaleId());
-        log.info("[CORE-Worker-{}] Last Time: {}", workerId, event.getLastTime());
-        log.info("[CORE-Worker-{}] Status: {}", workerId, event.getStatus());
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+
+        log.debug("=====================================");
+        log.debug("[CORE-Worker-{}] Received measurement from Scale ID: {}", workerId, event.getScaleId());
+        log.debug("[CORE-Worker-{}] Last Time: {}", workerId, event.getLastTime());
+        log.debug("[CORE-Worker-{}] Status: {}", workerId, event.getStatus());
         
         // Log với DataField object
         if (event.getData1() != null) {
             String name = event.getData1().getName() != null ? event.getData1().getName() : "Data 1";
-            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData1().getValue());
+            log.debug("[CORE-Worker-{}] {}: {}", workerId, name, event.getData1().getValue());
         }
         
         if (event.getData2() != null) {
             String name = event.getData2().getName() != null ? event.getData2().getName() : "Data 2";
-            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData2().getValue());
+            log.debug("[CORE-Worker-{}] {}: {}", workerId, name, event.getData2().getValue());
         }
         
         if (event.getData3() != null) {
             String name = event.getData3().getName() != null ? event.getData3().getName() : "Data 3";
-            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData3().getValue());
+            log.debug("[CORE-Worker-{}] {}: {}", workerId, name, event.getData3().getValue());
         }
         
         if (event.getData4() != null) {
             String name = event.getData4().getName() != null ? event.getData4().getName() : "Data 4";
-            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData4().getValue());
+            log.debug("[CORE-Worker-{}] {}: {}", workerId, name, event.getData4().getValue());
         }
         
         if (event.getData5() != null) {
             String name = event.getData5().getName() != null ? event.getData5().getName() : "Data 5";
-            log.info("[CORE-Worker-{}] {}: {}", workerId, name, event.getData5().getValue());
+            log.debug("[CORE-Worker-{}] {}: {}", workerId, name, event.getData5().getValue());
         }
         
-        log.info("=====================================");
+        log.debug("=====================================");
     }
     
     /**

@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +72,10 @@ public class EnterpriseReportController {
             reportDefinitionService.validateExecutable(reportCode);
             
             // 3. Validate Format
-            reportDefinitionService.validateFormat(reportCode, format.toUpperCase());
+            if (format == null || format.trim().isEmpty()) {
+                throw new IllegalArgumentException("format must not be blank");
+            }
+            reportDefinitionService.validateFormat(reportCode, format.trim().toUpperCase(Locale.ROOT));
             
             // 4. Start execution tracking
             Map<String, Object> parameters = buildParameters(request, format, templateId);

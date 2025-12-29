@@ -18,6 +18,17 @@ public class DeviceEngineProperties {
     private int workerThreads = 8;
 
     /**
+     * Maximum number of threads for device engines.
+     * Prevents unbounded thread growth with cached thread pools.
+     */
+    private int maxEngineThreads = 400;
+
+    /**
+     * Engine thread keep-alive time (seconds) when idle.
+     */
+    private int engineThreadKeepAliveSeconds = 60;
+
+    /**
      * Capacity of the in-memory active queue
      */
     private int queueCapacity = 100000;

@@ -95,6 +95,13 @@ public class ReportTemplateService {
             ReportTemplate template,
             ReportExportRequest request
     ) {
+        if (template == null) {
+            throw new IllegalArgumentException("template must not be null");
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("request must not be null");
+        }
+
         OffsetDateTime startTime = request.getStartTime();
         OffsetDateTime endTime = request.getEndTime();
         List<Long> scaleIds = request.getScaleIds();
@@ -123,6 +130,9 @@ public class ReportTemplateService {
                 startTime.getOffset(), endTime.getOffset());
         
         List<WeighingLog> logs = weighingLogRepository.findAllInTimeRange(startTime, endTime);
+        if (logs == null) {
+            logs = Collections.emptyList();
+        }
         
         log.info("Fetched {} weighing logs before filtering", logs.size());
 
@@ -156,12 +166,16 @@ public class ReportTemplateService {
 
         // Fetch scale information first
         List<Long> uniqueScaleIds = logs.stream()
-                .map(WeighingLog::getScaleId)
+            .map(WeighingLog::getScaleId)
+            .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
         List<Scale> scales = scaleRepository.findAllById(uniqueScaleIds);
         Map<Long, Scale> scaleMap = scales.stream()
                 .collect(Collectors.toMap(Scale::getId, s -> s));
+
+        // Apply global aggregation method from request to all WEIGHING_DATA columns
+        ReportColumn.AggregationType effectiveAggregationType = mapAggregationMethod(request.getAggregationMethod());
 
         // Build report rows - group by time interval if specified
         List<ReportData.ReportRow> rows = new ArrayList<>();
@@ -175,6 +189,9 @@ public class ReportTemplateService {
             Map<String, Map<Long, List<WeighingLog>>> logsByPeriodAndScale = new TreeMap<>();
             
             for (WeighingLog logEntry : logs) {
+                if (logEntry == null || logEntry.getScaleId() == null || logEntry.getCreatedAt() == null) {
+                    continue;
+                }
                 String period = truncateToInterval(logEntry.getCreatedAt(), request.getTimeInterval());
                 logsByPeriodAndScale
                         .computeIfAbsent(period, k -> new HashMap<>())
@@ -198,8 +215,8 @@ public class ReportTemplateService {
                         continue;
                     }
                     
-                    ReportData.ReportRow row = buildRowFromTemplate(
-                            template, scale, periodLogs, rowNumber++, period);
+                        ReportData.ReportRow row = buildRowFromTemplate(
+                            template, scale, periodLogs, rowNumber++, period, effectiveAggregationType);
                     rows.add(row);
                 }
             }
@@ -221,7 +238,7 @@ public class ReportTemplateService {
                 }
 
                 ReportData.ReportRow row = buildRowFromTemplate(
-                        template, scale, scaleLogs, rowNumber++, null);
+                    template, scale, scaleLogs, rowNumber++, null, effectiveAggregationType);
                 rows.add(row);
             }
         }
@@ -242,6 +259,8 @@ public class ReportTemplateService {
         metadata.put("organizationName", org.getCompanyName());
         metadata.put("watermark", org.getWatermarkText());
         metadata.put("template", template);
+        metadata.put("aggregationMethod", request.getAggregationMethod() != null ? request.getAggregationMethod().name() : null);
+        metadata.put("aggregationMethodLabel", formatAggregationMethodLabel(request.getAggregationMethod()));
         
         // Get column names from scale config (only for fields with config)
         String[] columnNames = getColumnNamesFromConfig(uniqueScaleIds.isEmpty() ? null : uniqueScaleIds.get(0));
@@ -361,7 +380,8 @@ public class ReportTemplateService {
             Scale scale,
             List<WeighingLog> logs,
             int rowNumber,
-            String period
+            String period,
+            ReportColumn.AggregationType aggregationType
     ) {
         ReportData.ReportRow.ReportRowBuilder builder = ReportData.ReportRow.builder()
                 .rowNumber(rowNumber)
@@ -379,7 +399,7 @@ public class ReportTemplateService {
         // Calculate aggregations for data fields based on columns
         for (ReportColumn column : template.getColumns()) {
             if (column.getDataSource() == ReportColumn.DataSource.WEIGHING_DATA) {
-                Double value = calculateAggregation(logs, column);
+                Double value = calculateAggregation(logs, column, aggregationType);
                 if (column.getDataField()== null) {
                     log.warn("Skip WEIGHING_DATA column {} due to null dataField", column.getColumnKey());
                     continue;
@@ -401,9 +421,12 @@ public class ReportTemplateService {
     /**
      * Calculate aggregation for a column
      */
-    private Double calculateAggregation(List<WeighingLog> logs, ReportColumn column) {
+    private Double calculateAggregation(List<WeighingLog> logs, ReportColumn column, ReportColumn.AggregationType overrideAggType) {
         String field = column.getDataField();
-        ReportColumn.AggregationType aggType = column.getAggregationType();
+        ReportColumn.AggregationType aggType = overrideAggType != null ? overrideAggType : column.getAggregationType();
+        if (aggType == null) {
+            aggType = ReportColumn.AggregationType.SUM;
+        }
         if (!logs.isEmpty()) {
             for (int i = 0; i < Math.min(3, logs.size()); i++) {
                 WeighingLog logEntry = logs.get(i);
@@ -416,7 +439,7 @@ public class ReportTemplateService {
                     case "data_5" -> logEntry.getData5();
                     default -> null;
                 };
-                log.info("  Log #{}: {} = '{}'", i + 1, field, rawValue);
+                log.debug("  Log #{}: {} = '{}'", i + 1, field, rawValue);
             }
         }
         
@@ -427,11 +450,11 @@ public class ReportTemplateService {
                 .collect(Collectors.toList());
 
         if (values.isEmpty()) {
-            log.warn("No non-zero values extracted from field {} (all null, invalid, or zero). Returning 0.0", field);
+            log.debug("No non-zero values extracted from field {} (all null, invalid, or zero). Returning 0.0", field);
             return 0.0;
         }
         
-        log.info("Extracted {} non-zero values from field {}: {}", values.size(), field, 
+        log.debug("Extracted {} non-zero values from field {}: {}", values.size(), field,
                 values.size() <= 5 ? values : values.subList(0, 5) + "...");
 
         Double result = switch (aggType) {
@@ -443,7 +466,7 @@ public class ReportTemplateService {
             case NONE -> values.isEmpty() ? 0.0 : values.get(0);
         };
         
-        log.info("Result for {} on {}: {}", aggType, field, result);
+        log.debug("Result for {} on {}: {}", aggType, field, result);
         return result;
     }
 
@@ -525,7 +548,7 @@ public class ReportTemplateService {
             
             // Parse VARCHAR string to double
             double result = Double.parseDouble(cleanValue);
-            log.info("Successfully parsed '{}' -> {}", jsonbValue, result);
+            log.debug("Successfully parsed '{}' -> {}", jsonbValue, result);
             return result;
             
         } catch (NumberFormatException e) {
@@ -533,6 +556,32 @@ public class ReportTemplateService {
                     jsonbValue, jsonbValue.length(), e.getMessage());
             return 0.0;
         }
+    }
+
+    private static ReportColumn.AggregationType mapAggregationMethod(ReportExportRequest.AggregationMethod method) {
+        if (method == null) {
+            return ReportColumn.AggregationType.SUM;
+        }
+        return switch (method) {
+            case SUM -> ReportColumn.AggregationType.SUM;
+            case AVG -> ReportColumn.AggregationType.AVG;
+            case MAX -> ReportColumn.AggregationType.MAX;
+            case MIN -> ReportColumn.AggregationType.MIN;
+            case COUNT -> ReportColumn.AggregationType.COUNT;
+        };
+    }
+
+    private static String formatAggregationMethodLabel(ReportExportRequest.AggregationMethod method) {
+        if (method == null) {
+            return "Tổng (SUM)";
+        }
+        return switch (method) {
+            case SUM -> "Tổng (SUM)";
+            case AVG -> "Trung bình (AVG)";
+            case MAX -> "Lớn nhất (MAX)";
+            case MIN -> "Nhỏ nhất (MIN)";
+            case COUNT -> "Đếm (COUNT)";
+        };
     }
 
     /**
@@ -660,7 +709,6 @@ public class ReportTemplateService {
         if (dataConfig == null || dataConfig.isEmpty()) {
             return null;
         }
-
         // Check if field is used
         Object isUsedObj = dataConfig.get("is_used");
         boolean isUsed = isUsedObj != null && (isUsedObj instanceof Boolean ? (Boolean) isUsedObj : Boolean.parseBoolean(isUsedObj.toString()));

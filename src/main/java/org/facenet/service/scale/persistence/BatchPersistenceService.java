@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -23,7 +23,7 @@ public class BatchPersistenceService {
     private final PersistenceService persistenceService;
     private final ExecutorService batchPersistenceExecutor;
     private final PersistenceProperties persistenceProperties;
-    private final BlockingQueue<MeasurementEvent> batchQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<MeasurementEvent> batchQueue;
     private volatile boolean running = true;
 
     public BatchPersistenceService(
@@ -33,6 +33,9 @@ public class BatchPersistenceService {
         this.persistenceService = persistenceService;
         this.batchPersistenceExecutor = batchPersistenceExecutor;
         this.persistenceProperties = persistenceProperties;
+        this.batchQueue = new ArrayBlockingQueue<>(
+            Math.max(1, persistenceProperties.getBatch().getQueueCapacity())
+        );
     }
 
     /**
