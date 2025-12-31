@@ -1,0 +1,53 @@
+# This configuration is intended for development purpose, it's **your** responsibility to harden it for production
+version: '3.3'
+services:
+  fe-client:
+    image: fe-client-scale
+    #image: fe-client
+    container_name: fe-client-scale
+    restart: unless-stopped
+    environment:
+      - API_END_POINT=${API_END_POINT}/vms
+      - API_END_POINT_PMS=${API_END_POINT}/pms
+      - API_END_POINT_PREVIEW=${API_END_POINT}/vms/assets
+      - API_END_POINT_DOWNLOAD=${API_END_POINT}/vms/api/assets
+      - URL_VMS=${API_END_POINT}
+      - URL_PMS=${API_END_POINT}
+      - URL_HOME=${API_END_POINT}
+      - KEYCLOAK_ISSUER=${KEYCLOAK_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENTID=${KEYCLOAK_CLIENTID}
+      - BASE_API_URI_NOTIFICATION_SERVICE=${API_END_POINT}/vms/
+      - BASE_API_URI_NOTIFICATION_SERVICE_PMS=${API_END_POINT}/pms/
+    ports:
+      - '0.0.0.0:9999:9999'
+    volumes:
+     - ./FE/build/dist/mdm/:/usr/share/nginx/html/   
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20MB"
+        max-file: "5"
+  backend-scale:
+    image: backend-scale:latest
+    container_name: backend-scale
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SERVER_PORT: 9090
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-${DB_USER}}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${DB_PASSWORD}}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    ports:
+      - '0.0.0.0:9090:9090'
+    volumes:
+      - ./BE/ScaleHubIOT-1.0-SNAPSHOT.jar:/app.jar:ro
+    command: ["java", "-jar", "/app.jar"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20MB"
+        max-file: "5"
+  
+      

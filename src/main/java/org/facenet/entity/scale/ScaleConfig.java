@@ -4,6 +4,7 @@ import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.facenet.common.audit.Auditable;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Type;
 
 import java.util.Map;
@@ -11,9 +12,11 @@ import java.util.Map;
 /**
  * Entity for scale_configs table
  * Uses JSONB for flexible configuration storage
+ * @DynamicUpdate ensures only changed columns are included in UPDATE statements
  */
 @Entity
 @Table(name = "scale_configs")
+@DynamicUpdate  // Critical for JSONB dirty checking with @MapsId
 @Getter
 @Setter
 @NoArgsConstructor

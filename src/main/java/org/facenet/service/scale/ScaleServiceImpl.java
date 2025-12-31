@@ -1,5 +1,8 @@
 package org.facenet.service.scale;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.ResourceNotFoundException;
 import org.facenet.dto.scale.ScaleConfigDto;
@@ -36,6 +39,8 @@ public class ScaleServiceImpl implements ScaleService {
     private final ScaleConfigRepository scaleConfigRepository;
     private final LocationRepository locationRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final EntityManager entityManager;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Cacheable(value = "scales")
@@ -155,24 +160,54 @@ public class ScaleServiceImpl implements ScaleService {
     @Transactional
     @CacheEvict(value = "scaleConfig", key = "#scaleId")
     public ScaleConfigDto.Response updateScaleConfig(Long scaleId, ScaleConfigDto.Request request) {
-        ScaleConfig config = scaleConfigRepository.findById(scaleId)
+        try {
+            // Convert Maps to JSON strings for native query
+            String connParamsJson = request.getConnParams() != null ? 
+                objectMapper.writeValueAsString(request.getConnParams()) : null;
+            String data1Json = request.getData1() != null ? 
+                objectMapper.writeValueAsString(request.getData1()) : null;
+            String data2Json = request.getData2() != null ? 
+                objectMapper.writeValueAsString(request.getData2()) : null;
+            String data3Json = request.getData3() != null ? 
+                objectMapper.writeValueAsString(request.getData3()) : null;
+            String data4Json = request.getData4() != null ? 
+                objectMapper.writeValueAsString(request.getData4()) : null;
+            String data5Json = request.getData5() != null ? 
+                objectMapper.writeValueAsString(request.getData5()) : null;
+
+            // Use native query to update - bypasses @MapsId issues
+            int updatedRows = scaleConfigRepository.updateScaleConfig(
+                scaleId,
+                request.getProtocol(),
+                request.getPollInterval() != null ? request.getPollInterval() : 1000,
+                connParamsJson,
+                data1Json,
+                data2Json,
+                data3Json,
+                data4Json,
+                data5Json,
+                "system" // TODO: Get from security context
+            );
+
+            if (updatedRows == 0) {
+                throw new ResourceNotFoundException("Scale config", "scaleId", scaleId);
+            }
+
+            // Clear entity manager cache to ensure fresh data
+            entityManager.clear();
+
+            // Fetch updated config
+            ScaleConfig updatedConfig = scaleConfigRepository.findById(scaleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale config", "scaleId", scaleId));
 
-        config.setProtocol(request.getProtocol());
-        config.setPollInterval(request.getPollInterval() != null ? request.getPollInterval() : 1000);
-        config.setConnParams(request.getConnParams());
-        config.setData1(request.getData1());
-        config.setData2(request.getData2());
-        config.setData3(request.getData3());
-        config.setData4(request.getData4());
-        config.setData5(request.getData5());
+            // Publish event for hot-reload and cache invalidation
+            eventPublisher.publishEvent(new ConfigChangedEvent(this, scaleId, "CONFIG_UPDATE"));
 
-        config = scaleConfigRepository.save(config);
+            return ScaleMapper.toConfigDto(updatedConfig);
 
-        // Publish event for hot-reload and cache invalidation
-        eventPublisher.publishEvent(new ConfigChangedEvent(this, scaleId, "CONFIG_UPDATE"));
-
-        return ScaleMapper.toConfigDto(config);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize config data", e);
+        }
     }
 
     private void createDefaultConfig(Scale scale) {

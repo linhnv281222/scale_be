@@ -1,5 +1,10 @@
 package org.facenet.controller.scale;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.response.ApiResponse;
@@ -88,8 +93,20 @@ public class ScaleController {
 
     @PutMapping("/{id}/config")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @Operation(summary = "Update scale configuration", 
+               description = "Update the configuration for a specific scale including protocol, polling interval, and data mappings")
+    @ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Configuration updated successfully",
+                           content = @Content(mediaType = "application/json", 
+                                            schema = @Schema(implementation = ScaleConfigDto.Response.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Scale not found"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied")
+    })
     public ResponseEntity<ApiResponse<ScaleConfigDto.Response>> updateScaleConfig(
+            @Parameter(description = "Scale ID", required = true, example = "1")
             @PathVariable("id") Long id,
+            @Parameter(description = "Scale configuration data", required = true)
             @Valid @RequestBody ScaleConfigDto.Request request) {
         ScaleConfigDto.Response config = scaleService.updateScaleConfig(id, request);
         return ResponseEntity.ok(ApiResponse.success(config));
