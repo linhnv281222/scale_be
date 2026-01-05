@@ -13,10 +13,12 @@ import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.entity.scale.WeighingLog;
 import org.facenet.repository.report.OrganizationSettingsRepository;
 import org.facenet.repository.report.ReportTemplateRepository;
+import org.facenet.repository.report.TemplateImportRepository;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.facenet.repository.scale.WeighingLogRepository;
 import org.facenet.service.scale.report.ReportService;
+import org.facenet.util.TemplateFileUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,11 +38,13 @@ import java.util.stream.Collectors;
 public class ReportTemplateService {
 
     private final ReportTemplateRepository templateRepository;
+    private final TemplateImportRepository templateImportRepository;
     private final OrganizationSettingsRepository organizationRepository;
     private final WeighingLogRepository weighingLogRepository;
     private final ScaleRepository scaleRepository;
     private final ScaleConfigRepository scaleConfigRepository;
     private final ReportService scaleReportService;
+    private final TemplateFileUtil templateFileUtil;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -1145,4 +1149,279 @@ public class ReportTemplateService {
     public List<ReportTemplate> getTemplatesByType(ReportTemplate.ReportType type) {
         return templateRepository.findByReportTypeAndIsActiveTrue(type);
     }
+
+    // ===== TEMPLATE IMPORT OPERATIONS =====
+
+    /**
+     * Import template file and save to resources
+     * Stores metadata in database
+     */
+    @Transactional
+    public ReportTemplateDto.TemplateImportResponse importTemplateFile(
+            ReportTemplateDto.TemplateImportRequest request,
+            MultipartFile file) throws IOException {
+        
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Template file must not be empty");
+        }
+
+        String templateCode = request.getTemplateCode().trim();
+        
+        // Validate file
+        if (!templateFileUtil.isValidTemplateFile(file.getOriginalFilename())) {
+            throw new IllegalArgumentException("Invalid template file type. Supported: .docx, .doc, .xlsx, .pdf");
+        }
+
+        // Check if template code already exists
+        if (templateRepository.findByCode(templateCode).isPresent()) {
+            throw new IllegalArgumentException("Template code already exists: " + templateCode);
+        }
+
+        byte[] fileContent = file.getBytes();
+        String fileHash = templateFileUtil.calculateFileHash(fileContent);
+
+        // Check for duplicate file (by hash)
+        if (templateImportRepository.existsByFileHash(fileHash)) {
+            throw new IllegalArgumentException("This template file has already been imported (duplicate detected by hash)");
+        }
+
+        try {
+            // Save file to resources directory
+            String resourcePath = templateFileUtil.saveTemplateToResources(
+                    fileContent,
+                    templateCode,
+                    file.getOriginalFilename()
+            );
+
+            // Check if resource path already exists
+            if (templateImportRepository.existsByResourcePath(resourcePath)) {
+                throw new IllegalArgumentException("Resource path already exists: " + resourcePath);
+            }
+
+            // Create report template entity
+            ReportTemplate template = ReportTemplate.builder()
+                    .code(templateCode)
+                    .name(request.getTemplateName())
+                    .description(request.getDescription())
+                    .titleTemplate(request.getTitleTemplate())
+                    .reportType(ReportTemplate.ReportType.WORD)
+                    .isActive(request.getIsActive() != null ? request.getIsActive() : true)
+                    .isDefault(false)
+                    .build();
+
+            template = templateRepository.save(template);
+
+            // Create import record
+            TemplateImport templateImport = TemplateImport.builder()
+                    .template(template)
+                    .templateCode(templateCode)
+                    .originalFilename(file.getOriginalFilename())
+                    .resourcePath(resourcePath)
+                    .filePath(templateFileUtil.getAbsolutePath(resourcePath))
+                    .fileSizeBytes(templateFileUtil.getFileSize(fileContent))
+                    .fileHash(fileHash)
+                    .importStatus(TemplateImport.ImportStatus.ACTIVE)
+                    .importDate(OffsetDateTime.now())
+                    .importNotes(request.getImportNotes())
+                    .isActive(true)
+                    .build();
+
+            templateImport = templateImportRepository.save(templateImport);
+
+            log.info("Template imported successfully: code={}, resourcePath={}, size={}", 
+                    templateCode, resourcePath, fileContent.length);
+
+            return toTemplateImportResponse(templateImport);
+
+        } catch (IOException e) {
+            log.error("Error importing template file: {}", templateCode, e);
+            throw new RuntimeException("Failed to import template file: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Get all imported templates
+     */
+    @Transactional(readOnly = true)
+    public List<ReportTemplateDto.TemplateImportListResponse> listImportedTemplates() {
+        return templateImportRepository.findByIsActiveTrueOrderByImportDateDesc()
+                .stream()
+                .map(this::toTemplateImportListResponse)
+                .toList();
+    }
+
+    /**
+     * Get imported template details
+     */
+    @Transactional(readOnly = true)
+    public ReportTemplateDto.ImportedTemplateDetailsResponse getImportedTemplateDetails(Long importId) {
+        TemplateImport templateImport = templateImportRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Template import not found: " + importId));
+
+        return ReportTemplateDto.ImportedTemplateDetailsResponse.builder()
+                .importId(templateImport.getId())
+                .template(toWordTemplateResponse(templateImport.getTemplate()))
+                .originalFilename(templateImport.getOriginalFilename())
+                .resourcePath(templateImport.getResourcePath())
+                .fileSizeBytes(templateImport.getFileSizeBytes())
+                .fileHash(templateImport.getFileHash())
+                .importStatus(templateImport.getImportStatus().name())
+                .importDate(templateImport.getImportDate())
+                .importNotes(templateImport.getImportNotes())
+                .build();
+    }
+
+    /**
+     * Get import by template ID
+     */
+    @Transactional(readOnly = true)
+    public ReportTemplateDto.TemplateImportResponse getImportByTemplateId(Long templateId) {
+        TemplateImport templateImport = templateImportRepository.findByTemplateId(templateId)
+                .orElseThrow(() -> new RuntimeException("No import found for template ID: " + templateId));
+
+        return toTemplateImportResponse(templateImport);
+    }
+
+    /**
+     * Get import by template code
+     */
+    @Transactional(readOnly = true)
+    public List<ReportTemplateDto.TemplateImportListResponse> getImportsByTemplateCode(String templateCode) {
+        return templateImportRepository.findByTemplateCode(templateCode)
+                .stream()
+                .map(this::toTemplateImportListResponse)
+                .toList();
+    }
+
+    /**
+     * Download imported template file
+     */
+    @Transactional(readOnly = true)
+    public ReportTemplateService.TemplateFileRecord downloadImportedTemplate(Long importId) throws IOException {
+        TemplateImport templateImport = templateImportRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Template import not found: " + importId));
+
+        byte[] fileContent = templateFileUtil.readTemplateFile(templateImport.getResourcePath());
+
+        return new TemplateFileRecord(
+                templateImport.getOriginalFilename(),
+                fileContent,
+                templateImport.getFileHash()
+        );
+    }
+
+    /**
+     * Archive imported template
+     */
+    @Transactional
+    public ReportTemplateDto.TemplateImportResponse archiveImportedTemplate(Long importId) {
+        TemplateImport templateImport = templateImportRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Template import not found: " + importId));
+
+        templateImport.setImportStatus(TemplateImport.ImportStatus.ARCHIVED);
+        templateImport.setIsActive(false);
+        templateImport = templateImportRepository.save(templateImport);
+
+        log.info("Template import archived: {}", importId);
+
+        return toTemplateImportResponse(templateImport);
+    }
+
+    /**
+     * Delete imported template (soft delete)
+     */
+    @Transactional
+    public void deleteImportedTemplate(Long importId) {
+        TemplateImport templateImport = templateImportRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Template import not found: " + importId));
+
+        // Delete physical file from resources
+        boolean fileDeleted = templateFileUtil.deleteTemplateFile(templateImport.getResourcePath());
+        log.info("Template file deleted: {} (success={})", templateImport.getResourcePath(), fileDeleted);
+
+        // Mark as deleted in database
+        templateImport.setImportStatus(TemplateImport.ImportStatus.DELETED);
+        templateImport.setIsActive(false);
+        templateImportRepository.save(templateImport);
+
+        // Delete template if no other imports reference it
+        ReportTemplate template = templateImport.getTemplate();
+        templateImportRepository.deleteByTemplateId(template.getId());
+        templateRepository.delete(template);
+
+        log.info("Template import deleted: {}", importId);
+    }
+
+    /**
+     * Get template file from resources
+     */
+    @Transactional(readOnly = true)
+    public byte[] getImportedTemplateFile(Long importId) throws IOException {
+        TemplateImport templateImport = templateImportRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Template import not found: " + importId));
+
+        if (!templateFileUtil.fileExists(templateImport.getResourcePath())) {
+            throw new RuntimeException("Template file not found in resources: " + templateImport.getResourcePath());
+        }
+
+        return templateFileUtil.readTemplateFile(templateImport.getResourcePath());
+    }
+
+    /**
+     * Verify template file integrity
+     */
+    @Transactional(readOnly = true)
+    public boolean verifyTemplateFileIntegrity(Long importId) throws IOException {
+        TemplateImport templateImport = templateImportRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Template import not found: " + importId));
+
+        byte[] fileContent = templateFileUtil.readTemplateFile(templateImport.getResourcePath());
+        String currentHash = templateFileUtil.calculateFileHash(fileContent);
+
+        boolean isValid = currentHash.equals(templateImport.getFileHash());
+        log.info("Template file integrity check: importId={}, valid={}", importId, isValid);
+
+        if (!isValid) {
+            // Mark as corrupted
+            templateImport.setImportStatus(TemplateImport.ImportStatus.CORRUPTED);
+            templateImportRepository.save(templateImport);
+        }
+
+        return isValid;
+    }
+
+    // ===== HELPER METHODS =====
+
+    private ReportTemplateDto.TemplateImportResponse toTemplateImportResponse(TemplateImport templateImport) {
+        return ReportTemplateDto.TemplateImportResponse.builder()
+                .id(templateImport.getId())
+                .templateId(templateImport.getTemplate().getId())
+                .templateCode(templateImport.getTemplateCode())
+                .originalFilename(templateImport.getOriginalFilename())
+                .resourcePath(templateImport.getResourcePath())
+                .fileSizeBytes(templateImport.getFileSizeBytes())
+                .fileHash(templateImport.getFileHash())
+                .importStatus(templateImport.getImportStatus().name())
+                .importDate(templateImport.getImportDate())
+                .importNotes(templateImport.getImportNotes())
+                .isActive(templateImport.getIsActive())
+                .createdBy(templateImport.getCreatedBy())
+                .createdAt(templateImport.getCreatedAt())
+                .build();
+    }
+
+    private ReportTemplateDto.TemplateImportListResponse toTemplateImportListResponse(TemplateImport templateImport) {
+        return ReportTemplateDto.TemplateImportListResponse.builder()
+                .id(templateImport.getId())
+                .templateCode(templateImport.getTemplateCode())
+                .originalFilename(templateImport.getOriginalFilename())
+                .resourcePath(templateImport.getResourcePath())
+                .fileSizeBytes(templateImport.getFileSizeBytes())
+                .importStatus(templateImport.getImportStatus().name())
+                .importDate(templateImport.getImportDate())
+                .isActive(templateImport.getIsActive())
+                .build();
+    }
+
+    public record TemplateFileRecord(String filename, byte[] content, String fileHash) {}
 }

@@ -1,0 +1,353 @@
+{
+  "info": {
+    "_postman_id": "template-import-api",
+    "name": "Template Import API",
+    "description": "APIs for importing and managing report templates",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Template Import",
+      "item": [
+        {
+          "name": "1. Import Template File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "value": "",
+                  "type": "file",
+                  "disabled": false
+                },
+                {
+                  "key": "templateCode",
+                  "value": "REPORT_MONTHLY",
+                  "type": "text"
+                },
+                {
+                  "key": "templateName",
+                  "value": "Monthly Financial Report",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Template for monthly financial reports",
+                  "type": "text"
+                },
+                {
+                  "key": "titleTemplate",
+                  "value": "Monthly Financial Report - {month}/{year}",
+                  "type": "text"
+                },
+                {
+                  "key": "importNotes",
+                  "value": "First version of monthly report",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/import",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "import"]
+            },
+            "description": "Import a new template file to resources directory"
+          },
+          "response": []
+        },
+        {
+          "name": "2. List All Imported Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports"]
+            },
+            "description": "Get list of all imported templates"
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get Template Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports", "1"]
+            },
+            "description": "Get detailed information about a specific imported template"
+          },
+          "response": []
+        },
+        {
+          "name": "4. Get Import by Template Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports/by-code/REPORT_MONTHLY",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports", "by-code", "REPORT_MONTHLY"]
+            },
+            "description": "Find imports by template code"
+          },
+          "response": []
+        },
+        {
+          "name": "5. Get Import by Template ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports/by-template/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports", "by-template", "1"]
+            },
+            "description": "Find import by template ID"
+          },
+          "response": []
+        },
+        {
+          "name": "6. Download Template File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports/1/download",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports", "1", "download"]
+            },
+            "description": "Download imported template file"
+          },
+          "response": []
+        },
+        {
+          "name": "7. Verify File Integrity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports/1/verify",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports", "1", "verify"]
+            },
+            "description": "Verify template file hasn't been corrupted"
+          },
+          "response": []
+        },
+        {
+          "name": "8. Archive Template",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports/1/archive",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports", "1", "archive"]
+            },
+            "description": "Archive template (soft delete)"
+          },
+          "response": []
+        },
+        {
+          "name": "9. Delete Template Permanently",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/imports/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "imports", "1"]
+            },
+            "description": "Delete template permanently (removes file and database record)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Existing WORD Template APIs",
+      "item": [
+        {
+          "name": "List WORD Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get WORD Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create WORD Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"TEMPLATE_CODE\",\n  \"name\": \"Template Name\",\n  \"description\": \"Template Description\",\n  \"titleTemplate\": \"Template Title\",\n  \"isActive\": true,\n  \"isDefault\": false\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update WORD Template",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Template Name\",\n  \"description\": \"Updated Description\",\n  \"titleTemplate\": \"Updated Title\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set Default WORD Template",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word/1/set-default",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word", "1", "set-default"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload WORD Template File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "value": "",
+                  "type": "file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word/1/file",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word", "1", "file"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download WORD Template File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word/1/file",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word", "1", "file"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete WORD Template",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/report-templates/word/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "report-templates", "word", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
