@@ -13,6 +13,7 @@ import java.util.concurrent.BlockingQueue;
  * Hỗ trợ các protocol:
  * - MODBUS_TCP: Kết nối qua TCP/IP
  * - MODBUS_RTU: Kết nối qua Serial (COM port/RS485)
+ * - MODBUS_SBUS: S-Bus protocol (SAIA S-Bus over Serial)
  * - SERIAL: (Future) Giao thức Serial đơn giản
  */
 @Slf4j
@@ -49,6 +50,13 @@ public class EngineFactory {
             case "MODBUSRTU":
             case "RTU":
                 return new ModbusRtuEngine(config, queue);
+                
+            case "MODBUS_SBUS":
+            case "MODBUSSBUS":
+            case "SBUS":
+            case "S-BUS":
+            case "S_BUS":
+                return new SbusEngine(config, queue);
                 
             case "SERIAL":
                 // TODO: Implement SerialEngine cho giao thức Serial thuần

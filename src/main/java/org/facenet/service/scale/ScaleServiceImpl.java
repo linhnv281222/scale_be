@@ -8,11 +8,13 @@ import org.facenet.common.exception.ResourceNotFoundException;
 import org.facenet.dto.scale.ScaleConfigDto;
 import org.facenet.dto.scale.ScaleDto;
 import org.facenet.entity.location.Location;
+import org.facenet.entity.manufacturer.ScaleManufacturer;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.event.ConfigChangedEvent;
 import org.facenet.mapper.ScaleMapper;
 import org.facenet.repository.location.LocationRepository;
+import org.facenet.repository.manufacturer.ScaleManufacturerRepository;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -38,6 +40,7 @@ public class ScaleServiceImpl implements ScaleService {
     private final ScaleRepository scaleRepository;
     private final ScaleConfigRepository scaleConfigRepository;
     private final LocationRepository locationRepository;
+    private final ScaleManufacturerRepository manufacturerRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
@@ -83,10 +86,19 @@ public class ScaleServiceImpl implements ScaleService {
         Location location = locationRepository.findById(request.getLocationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", request.getLocationId()));
 
+        // Validate manufacturer exists if provided
+        ScaleManufacturer manufacturer = null;
+        if (request.getManufacturerId() != null) {
+            manufacturer = manufacturerRepository.findById(request.getManufacturerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", request.getManufacturerId()));
+        }
+
         Scale scale = Scale.builder()
                 .name(request.getName())
                 .location(location)
+                .manufacturer(manufacturer)
                 .model(request.getModel())
+                .direction(request.getDirection() != null ? org.facenet.entity.scale.ScaleDirection.valueOf(request.getDirection()) : null)
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .build();
 
@@ -116,9 +128,18 @@ public class ScaleServiceImpl implements ScaleService {
         Location location = locationRepository.findById(request.getLocationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", request.getLocationId()));
 
+        // Validate manufacturer exists if provided
+        ScaleManufacturer manufacturer = null;
+        if (request.getManufacturerId() != null) {
+            manufacturer = manufacturerRepository.findById(request.getManufacturerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", request.getManufacturerId()));
+        }
+
         scale.setName(request.getName());
         scale.setLocation(location);
+        scale.setManufacturer(manufacturer);
         scale.setModel(request.getModel());
+        scale.setDirection(request.getDirection() != null ? org.facenet.entity.scale.ScaleDirection.valueOf(request.getDirection()) : null);
         scale.setIsActive(request.getIsActive());
 
         scale = scaleRepository.save(scale);

@@ -29,7 +29,12 @@ public class ScaleDto {
         @JsonProperty("location_id")
         private Long locationId;
 
+        @JsonProperty("manufacturer_id")
+        private Long manufacturerId;
+
         private String model;
+
+        private String direction; // IMPORT or EXPORT
 
         @JsonProperty("is_active")
         private Boolean isActive;
@@ -54,7 +59,18 @@ public class ScaleDto {
         @JsonProperty("location_name")
         private String locationName;
 
+        @JsonProperty("manufacturer_id")
+        private Long manufacturerId;
+
+        @JsonProperty("manufacturer_name")
+        private String manufacturerName;
+
+        @JsonProperty("manufacturer_code")
+        private String manufacturerCode;
+
         private String model;
+
+        private String direction; // IMPORT or EXPORT
 
         @JsonProperty("is_active")
         private Boolean isActive;
@@ -89,6 +105,8 @@ public class ScaleDto {
         private String name;
 
         private String model;
+
+        private String direction; // IMPORT or EXPORT
 
         private Boolean isActive;
 

@@ -1,0 +1,51 @@
+package org.facenet.service.manufacturer;
+
+import org.facenet.dto.manufacturer.ScaleManufacturerDto;
+
+import java.util.List;
+
+/**
+ * Service interface for ScaleManufacturer operations
+ */
+public interface ScaleManufacturerService {
+
+    /**
+     * Get all manufacturers
+     */
+    List<ScaleManufacturerDto.Response> getAllManufacturers();
+
+    /**
+     * Get all active manufacturers
+     */
+    List<ScaleManufacturerDto.Response> getAllActiveManufacturers();
+
+    /**
+     * Get manufacturer by ID
+     */
+    ScaleManufacturerDto.Response getManufacturerById(Long id);
+
+    /**
+     * Search manufacturers by name or code
+     */
+    List<ScaleManufacturerDto.Response> searchManufacturers(String search);
+
+    /**
+     * Create a new manufacturer
+     */
+    ScaleManufacturerDto.Response createManufacturer(ScaleManufacturerDto.Request request);
+
+    /**
+     * Update manufacturer
+     */
+    ScaleManufacturerDto.Response updateManufacturer(Long id, ScaleManufacturerDto.Request request);
+
+    /**
+     * Delete manufacturer
+     */
+    void deleteManufacturer(Long id);
+
+    /**
+     * Toggle manufacturer active status
+     */
+    ScaleManufacturerDto.Response toggleActiveStatus(Long id);
+}
