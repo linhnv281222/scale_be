@@ -1,8 +1,11 @@
 package org.facenet.service.location;
 
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.location.LocationDto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service interface for Location operations
@@ -10,7 +13,12 @@ import java.util.List;
 public interface LocationService {
 
     /**
-     * Get all locations (flat list)
+     * Get all locations with pagination and filters
+     */
+    PageResponseDto<LocationDto.Response> getAllLocations(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all locations (flat list, non-paginated)
      */
     List<LocationDto.Response> getAllLocations();
 

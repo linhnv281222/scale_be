@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.response.ApiResponse;
 import org.facenet.dto.protocol.ProtocolDto;
 import org.facenet.service.protocol.ProtocolService;
@@ -13,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Controller for Protocol operations
@@ -26,25 +29,73 @@ public class ProtocolController {
     private final ProtocolService protocolService;
 
     /**
-     * Get all protocols
+     * Get all protocols with pagination and filters
+     * Supports filters: connectionType, isActive, code, name
+     * Examples:
+     * - /protocols?connectionType=TCP&isActive=true
+     * - /protocols?code_like=MODBUS&page=0&size=10
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get all protocols", description = "Retrieve all communication protocols")
-    public ResponseEntity<ApiResponse<List<ProtocolDto.Response>>> getAllProtocols() {
-        List<ProtocolDto.Response> protocols = protocolService.getAllProtocols();
+    @Operation(summary = "Get all protocols", description = "Retrieve all protocols with pagination and filters. Supports: connectionType, isActive, code, name, defaultPort")
+    public ResponseEntity<ApiResponse<PageResponseDto<ProtocolDto.Response>>> getAllProtocols(
+            @RequestParam(value = "page", defaultValue = "0") Integer page,
+            @RequestParam(value = "size", defaultValue = "10") Integer size,
+            @RequestParam(value = "sort", required = false) String sort,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "connectionType", required = false) String connectionType,
+            @RequestParam(value = "isActive", required = false) Boolean isActive,
+            @RequestParam(required = false) Map<String, String> allParams) {
+        
+        Map<String, String> filters = new java.util.HashMap<>(allParams);
+        filters.remove("page");
+        filters.remove("size");
+        filters.remove("sort");
+        filters.remove("search");
+        
+        if (connectionType != null) {
+            filters.put("connectionType", connectionType);
+        }
+        if (isActive != null) {
+            filters.put("isActive", isActive.toString());
+        }
+        
+        PageRequestDto pageRequest = PageRequestDto.builder()
+            .page(page)
+            .size(size)
+            .sort(sort)
+            .search(search)
+            .build();
+        
+        PageResponseDto<ProtocolDto.Response> protocols = protocolService.getAllProtocols(pageRequest, filters);
         return ResponseEntity.ok(ApiResponse.success(protocols));
     }
 
     /**
-     * Get all active protocols
+     * Get all protocols without pagination
      */
-    @GetMapping("/active")
+    @GetMapping("/all")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get active protocols", description = "Retrieve all active communication protocols")
-    public ResponseEntity<ApiResponse<List<ProtocolDto.Response>>> getAllActiveProtocols() {
-        List<ProtocolDto.Response> protocols = protocolService.getAllActiveProtocols();
-        return ResponseEntity.ok(ApiResponse.success(protocols));
+    @Operation(summary = "Get all protocols", description = "Retrieve all protocols without pagination. Supports same filters")
+    public ResponseEntity<ApiResponse<List<ProtocolDto.Response>>> getAllProtocolsList(
+            @RequestParam(value = "connectionType", required = false) String connectionType,
+            @RequestParam(value = "isActive", required = false) Boolean isActive) {
+        
+        if (connectionType == null && isActive == null) {
+            return ResponseEntity.ok(ApiResponse.success(protocolService.getAllProtocols()));
+        }
+        
+        Map<String, String> filters = new java.util.HashMap<>();
+        if (connectionType != null) {
+            filters.put("connectionType", connectionType);
+        }
+        if (isActive != null) {
+            filters.put("isActive", isActive.toString());
+        }
+        
+        PageRequestDto pageRequest = PageRequestDto.builder().page(0).size(10000).build();
+        PageResponseDto<ProtocolDto.Response> result = protocolService.getAllProtocols(pageRequest, filters);
+        return ResponseEntity.ok(ApiResponse.success(result.getContent()));
     }
 
     /**
@@ -69,31 +120,6 @@ public class ProtocolController {
             @PathVariable("code") String code) {
         ProtocolDto.Response protocol = protocolService.getProtocolByCode(code);
         return ResponseEntity.ok(ApiResponse.success(protocol));
-    }
-
-    /**
-     * Search protocols by name or code
-     */
-    @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Search protocols", description = "Search protocols by name or code")
-    public ResponseEntity<ApiResponse<List<ProtocolDto.Response>>> searchProtocols(
-            @RequestParam("q") String search) {
-        List<ProtocolDto.Response> protocols = protocolService.searchProtocols(search);
-        return ResponseEntity.ok(ApiResponse.success(protocols));
-    }
-
-    /**
-     * Get protocols by connection type
-     */
-    @GetMapping("/connection-type/{type}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get protocols by connection type", 
-               description = "Retrieve protocols filtered by connection type (TCP, SERIAL, etc.)")
-    public ResponseEntity<ApiResponse<List<ProtocolDto.Response>>> getProtocolsByConnectionType(
-            @PathVariable("type") String connectionType) {
-        List<ProtocolDto.Response> protocols = protocolService.getProtocolsByConnectionType(connectionType);
-        return ResponseEntity.ok(ApiResponse.success(protocols));
     }
 
     /**

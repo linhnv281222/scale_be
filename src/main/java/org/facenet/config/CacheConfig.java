@@ -20,7 +20,11 @@ public class CacheConfig {
                 "locationsTree",
                 "scales",
                 "scalesByLocation",
-                "scaleConfig"
+                "scaleConfig",
+                "manufacturers",
+                "activeManufacturers",
+                "protocols",
+                "activeProtocols"
         );
     }
 }

@@ -5,6 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.common.exception.AlreadyExistsException;
 import org.facenet.common.exception.ResourceNotFoundException;
 import org.facenet.common.exception.ValidationException;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.manufacturer.ScaleManufacturerDto;
 import org.facenet.entity.manufacturer.ScaleManufacturer;
 import org.facenet.mapper.ScaleManufacturerMapper;
@@ -12,10 +15,14 @@ import org.facenet.repository.manufacturer.ScaleManufacturerRepository;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service implementation for ScaleManufacturer operations
@@ -27,6 +34,28 @@ import java.util.List;
 public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
 
     private final ScaleManufacturerRepository manufacturerRepository;
+
+    @Override
+    public PageResponseDto<ScaleManufacturerDto.Response> getAllManufacturers(PageRequestDto pageRequest, Map<String, String> filters) {
+        log.debug("Getting manufacturers with pagination: page={}, size={}, filters={}", 
+                  pageRequest.getPage(), pageRequest.getSize(), filters);
+        
+        GenericSpecification<ScaleManufacturer> spec = new GenericSpecification<>();
+        Specification<ScaleManufacturer> specification = spec.buildSpecification(filters);
+        
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            Specification<ScaleManufacturer> searchSpec = spec.buildSearchSpecification(
+                pageRequest.getSearch(), "name", "code", "country", "description"
+            );
+            specification = specification.and(searchSpec);
+        }
+        
+        PageRequest springPageRequest = pageRequest.toPageRequest();
+        Page<ScaleManufacturer> page = manufacturerRepository.findAll(specification, springPageRequest);
+        Page<ScaleManufacturerDto.Response> responsePage = page.map(ScaleManufacturerMapper::toResponseDto);
+        
+        return PageResponseDto.from(responsePage);
+    }
 
     @Override
     @Cacheable(value = "manufacturers")

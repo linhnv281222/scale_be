@@ -2,6 +2,8 @@ package org.facenet.controller.manufacturer;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.response.ApiResponse;
 import org.facenet.dto.manufacturer.ScaleManufacturerDto;
 import org.facenet.service.manufacturer.ScaleManufacturerService;
@@ -11,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Controller for ScaleManufacturer operations
@@ -23,23 +26,71 @@ public class ScaleManufacturerController {
     private final ScaleManufacturerService manufacturerService;
 
     /**
-     * Get all manufacturers
+     * Get all manufacturers with pagination and filters
+     * Supports filters: country, isActive, code, name
+     * Examples:
+     * - /manufacturers?country=Vietnam&isActive=true
+     * - /manufacturers?name_like=toledo&page=0&size=10
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    public ResponseEntity<ApiResponse<List<ScaleManufacturerDto.Response>>> getAllManufacturers() {
-        List<ScaleManufacturerDto.Response> manufacturers = manufacturerService.getAllManufacturers();
+    public ResponseEntity<ApiResponse<PageResponseDto<ScaleManufacturerDto.Response>>> getAllManufacturers(
+            @RequestParam(value = "page", defaultValue = "0") Integer page,
+            @RequestParam(value = "size", defaultValue = "10") Integer size,
+            @RequestParam(value = "sort", required = false) String sort,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "country", required = false) String country,
+            @RequestParam(value = "isActive", required = false) Boolean isActive,
+            @RequestParam(required = false) Map<String, String> allParams) {
+        
+        Map<String, String> filters = new java.util.HashMap<>(allParams);
+        filters.remove("page");
+        filters.remove("size");
+        filters.remove("sort");
+        filters.remove("search");
+        
+        if (country != null) {
+            filters.put("country", country);
+        }
+        if (isActive != null) {
+            filters.put("isActive", isActive.toString());
+        }
+        
+        PageRequestDto pageRequest = PageRequestDto.builder()
+            .page(page)
+            .size(size)
+            .sort(sort)
+            .search(search)
+            .build();
+        
+        PageResponseDto<ScaleManufacturerDto.Response> manufacturers = manufacturerService.getAllManufacturers(pageRequest, filters);
         return ResponseEntity.ok(ApiResponse.success(manufacturers));
     }
 
     /**
-     * Get all active manufacturers
+     * Get all manufacturers without pagination
      */
-    @GetMapping("/active")
+    @GetMapping("/all")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    public ResponseEntity<ApiResponse<List<ScaleManufacturerDto.Response>>> getAllActiveManufacturers() {
-        List<ScaleManufacturerDto.Response> manufacturers = manufacturerService.getAllActiveManufacturers();
-        return ResponseEntity.ok(ApiResponse.success(manufacturers));
+    public ResponseEntity<ApiResponse<List<ScaleManufacturerDto.Response>>> getAllManufacturersList(
+            @RequestParam(value = "country", required = false) String country,
+            @RequestParam(value = "isActive", required = false) Boolean isActive) {
+        
+        if (country == null && isActive == null) {
+            return ResponseEntity.ok(ApiResponse.success(manufacturerService.getAllManufacturers()));
+        }
+        
+        Map<String, String> filters = new java.util.HashMap<>();
+        if (country != null) {
+            filters.put("country", country);
+        }
+        if (isActive != null) {
+            filters.put("isActive", isActive.toString());
+        }
+        
+        PageRequestDto pageRequest = PageRequestDto.builder().page(0).size(10000).build();
+        PageResponseDto<ScaleManufacturerDto.Response> result = manufacturerService.getAllManufacturers(pageRequest, filters);
+        return ResponseEntity.ok(ApiResponse.success(result.getContent()));
     }
 
     /**
@@ -54,17 +105,7 @@ public class ScaleManufacturerController {
     }
 
     /**
-     * Search manufacturers by name or code
-     */
-    @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    public ResponseEntity<ApiResponse<List<ScaleManufacturerDto.Response>>> searchManufacturers(
-            @RequestParam("q") String search) {
-        List<ScaleManufacturerDto.Response> manufacturers = manufacturerService.searchManufacturers(search);
-        return ResponseEntity.ok(ApiResponse.success(manufacturers));
-    }
 
-    /**
      * Create a new manufacturer
      */
     @PostMapping

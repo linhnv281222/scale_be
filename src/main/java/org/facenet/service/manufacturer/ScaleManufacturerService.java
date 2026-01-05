@@ -1,8 +1,11 @@
 package org.facenet.service.manufacturer;
 
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.manufacturer.ScaleManufacturerDto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service interface for ScaleManufacturer operations
@@ -10,7 +13,12 @@ import java.util.List;
 public interface ScaleManufacturerService {
 
     /**
-     * Get all manufacturers
+     * Get all manufacturers with pagination and filters
+     */
+    PageResponseDto<ScaleManufacturerDto.Response> getAllManufacturers(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all manufacturers (non-paginated)
      */
     List<ScaleManufacturerDto.Response> getAllManufacturers();
 

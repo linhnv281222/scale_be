@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.AlreadyExistsException;
 import org.facenet.common.exception.ResourceNotFoundException;
 import org.facenet.common.exception.ValidationException;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.location.LocationDto;
 import org.facenet.entity.location.Location;
 import org.facenet.event.LocationChangedEvent;
@@ -14,6 +17,9 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +38,25 @@ public class LocationServiceImpl implements LocationService {
     private final LocationRepository locationRepository;
     private final ScaleRepository scaleRepository;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Override
+    public PageResponseDto<LocationDto.Response> getAllLocations(PageRequestDto pageRequest, Map<String, String> filters) {
+        GenericSpecification<Location> spec = new GenericSpecification<>();
+        Specification<Location> specification = spec.buildSpecification(filters);
+        
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            Specification<Location> searchSpec = spec.buildSearchSpecification(
+                pageRequest.getSearch(), "name", "code", "address", "description"
+            );
+            specification = specification.and(searchSpec);
+        }
+        
+        PageRequest springPageRequest = pageRequest.toPageRequest();
+        Page<Location> page = locationRepository.findAll(specification, springPageRequest);
+        Page<LocationDto.Response> responsePage = page.map(LocationMapper::toResponseDto);
+        
+        return PageResponseDto.from(responsePage);
+    }
 
     @Override
     @Cacheable(value = "locations")

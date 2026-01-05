@@ -3,14 +3,21 @@ package org.facenet.service.shift;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.AlreadyExistsException;
 import org.facenet.common.exception.ResourceNotFoundException;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.shift.ShiftDto;
 import org.facenet.entity.shift.Shift;
 import org.facenet.mapper.ShiftMapper;
 import org.facenet.repository.shift.ShiftRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +25,25 @@ import java.util.List;
 public class ShiftServiceImpl implements ShiftService {
 
     private final ShiftRepository shiftRepository;
+
+    @Override
+    public PageResponseDto<ShiftDto.Response> getAll(PageRequestDto pageRequest, Map<String, String> filters) {
+        GenericSpecification<Shift> spec = new GenericSpecification<>();
+        Specification<Shift> specification = spec.buildSpecification(filters);
+        
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            Specification<Shift> searchSpec = spec.buildSearchSpecification(
+                pageRequest.getSearch(), "name", "code", "description"
+            );
+            specification = specification.and(searchSpec);
+        }
+        
+        PageRequest springPageRequest = pageRequest.toPageRequest();
+        Page<Shift> page = shiftRepository.findAll(specification, springPageRequest);
+        Page<ShiftDto.Response> responsePage = page.map(ShiftMapper::toResponseDto);
+        
+        return PageResponseDto.from(responsePage);
+    }
 
     @Override
     public List<ShiftDto.Response> getAll() {

@@ -2,6 +2,7 @@ package org.facenet.repository.manufacturer;
 
 import org.facenet.entity.manufacturer.ScaleManufacturer;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -12,7 +13,7 @@ import java.util.Optional;
  * Repository for ScaleManufacturer entity
  */
 @Repository
-public interface ScaleManufacturerRepository extends JpaRepository<ScaleManufacturer, Long> {
+public interface ScaleManufacturerRepository extends JpaRepository<ScaleManufacturer, Long>, JpaSpecificationExecutor<ScaleManufacturer> {
 
     Optional<ScaleManufacturer> findByCode(String code);
 

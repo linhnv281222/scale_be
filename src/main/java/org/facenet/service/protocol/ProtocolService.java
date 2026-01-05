@@ -1,8 +1,11 @@
 package org.facenet.service.protocol;
 
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.protocol.ProtocolDto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service interface for Protocol operations
@@ -10,7 +13,12 @@ import java.util.List;
 public interface ProtocolService {
 
     /**
-     * Get all protocols
+     * Get all protocols with pagination and filters
+     */
+    PageResponseDto<ProtocolDto.Response> getAllProtocols(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all protocols (non-paginated)
      */
     List<ProtocolDto.Response> getAllProtocols();
 

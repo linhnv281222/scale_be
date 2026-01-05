@@ -1,9 +1,12 @@
 package org.facenet.service.scale;
 
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.scale.ScaleConfigDto;
 import org.facenet.dto.scale.ScaleDto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service interface for Scale operations
@@ -11,7 +14,12 @@ import java.util.List;
 public interface ScaleService {
 
     /**
-     * Get all scales
+     * Get all scales with pagination and filters
+     */
+    PageResponseDto<ScaleDto.Response> getAllScales(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all scales (non-paginated)
      */
     List<ScaleDto.Response> getAllScales();
 
@@ -24,6 +32,21 @@ public interface ScaleService {
      * Get scales by multiple locations
      */
     List<ScaleDto.Response> getScalesByLocations(List<Long> locationIds);
+
+    /**
+     * Get scales by manufacturer
+     */
+    List<ScaleDto.Response> getScalesByManufacturer(Long manufacturerId);
+
+    /**
+     * Get scales by direction (IMPORT/EXPORT)
+     */
+    List<ScaleDto.Response> getScalesByDirection(String direction);
+
+    /**
+     * Get active scales
+     */
+    List<ScaleDto.Response> getActiveScales();
 
     /**
      * Get scale by ID

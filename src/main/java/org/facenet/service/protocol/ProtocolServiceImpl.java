@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.common.exception.AlreadyExistsException;
 import org.facenet.common.exception.ResourceNotFoundException;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.protocol.ProtocolDto;
 import org.facenet.entity.protocol.Protocol;
 import org.facenet.mapper.ProtocolMapper;
@@ -11,10 +14,14 @@ import org.facenet.repository.protocol.ProtocolRepository;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service implementation for Protocol operations
@@ -26,6 +33,29 @@ import java.util.List;
 public class ProtocolServiceImpl implements ProtocolService {
 
     private final ProtocolRepository protocolRepository;
+
+    @Override
+    public PageResponseDto<ProtocolDto.Response> getAllProtocols(PageRequestDto pageRequest, Map<String, String> filters) {
+        log.debug("Getting protocols with pagination: page={}, size={}, filters={}", 
+                  pageRequest.getPage(), pageRequest.getSize(), filters);
+        
+        GenericSpecification<Protocol> spec = new GenericSpecification<>();
+        Specification<Protocol> specification = spec.buildSpecification(filters);
+        
+        // Add search specification if search keyword is provided
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            Specification<Protocol> searchSpec = spec.buildSearchSpecification(
+                pageRequest.getSearch(), "name", "code", "description", "connectionType"
+            );
+            specification = specification.and(searchSpec);
+        }
+        
+        PageRequest springPageRequest = pageRequest.toPageRequest();
+        Page<Protocol> page = protocolRepository.findAll(specification, springPageRequest);
+        Page<ProtocolDto.Response> responsePage = page.map(ProtocolMapper::toResponseDto);
+        
+        return PageResponseDto.from(responsePage);
+    }
 
     @Override
     @Cacheable(value = "protocols")

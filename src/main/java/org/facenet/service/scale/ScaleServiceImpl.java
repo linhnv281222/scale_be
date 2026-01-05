@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.ResourceNotFoundException;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.scale.ScaleConfigDto;
 import org.facenet.dto.scale.ScaleDto;
 import org.facenet.entity.location.Location;
@@ -21,6 +24,9 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +52,25 @@ public class ScaleServiceImpl implements ScaleService {
     private final ObjectMapper objectMapper;
 
     @Override
+    public PageResponseDto<ScaleDto.Response> getAllScales(PageRequestDto pageRequest, Map<String, String> filters) {
+        GenericSpecification<Scale> spec = new GenericSpecification<>();
+        Specification<Scale> specification = spec.buildSpecification(filters);
+        
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            Specification<Scale> searchSpec = spec.buildSearchSpecification(
+                pageRequest.getSearch(), "name", "model"
+            );
+            specification = specification.and(searchSpec);
+        }
+        
+        PageRequest springPageRequest = pageRequest.toPageRequest();
+        Page<Scale> page = scaleRepository.findAll(specification, springPageRequest);
+        Page<ScaleDto.Response> responsePage = page.map(ScaleMapper::toResponseDto);
+        
+        return PageResponseDto.from(responsePage);
+    }
+
+    @Override
     @Cacheable(value = "scales")
     public List<ScaleDto.Response> getAllScales() {
         List<Scale> scales = scaleRepository.findAll();
@@ -66,6 +91,32 @@ public class ScaleServiceImpl implements ScaleService {
     @Override
     public List<ScaleDto.Response> getScalesByLocations(List<Long> locationIds) {
         List<Scale> scales = scaleRepository.findByLocationIdIn(locationIds);
+        return scales.stream()
+                .map(ScaleMapper::toResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ScaleDto.Response> getScalesByManufacturer(Long manufacturerId) {
+        List<Scale> scales = scaleRepository.findByManufacturerId(manufacturerId);
+        return scales.stream()
+                .map(ScaleMapper::toResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ScaleDto.Response> getScalesByDirection(String direction) {
+        org.facenet.entity.scale.ScaleDirection scaleDirection = 
+            org.facenet.entity.scale.ScaleDirection.valueOf(direction);
+        List<Scale> scales = scaleRepository.findByDirection(scaleDirection);
+        return scales.stream()
+                .map(ScaleMapper::toResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ScaleDto.Response> getActiveScales() {
+        List<Scale> scales = scaleRepository.findByIsActive(true);
         return scales.stream()
                 .map(ScaleMapper::toResponseDto)
                 .collect(Collectors.toList());
