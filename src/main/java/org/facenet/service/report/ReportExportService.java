@@ -1,15 +1,30 @@
 package org.facenet.service.report;
 
+import com.deepoove.poi.XWPFTemplate;
+import com.deepoove.poi.config.Configure;
+import com.deepoove.poi.plugin.table.LoopRowTableRenderPolicy;
 import com.lowagie.text.DocumentException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.dto.report.ReportData;
 import org.facenet.dto.report.ReportExportRequest;
 import org.facenet.entity.report.ReportTemplate;
+import org.facenet.entity.report.TemplateImport;
+import org.facenet.repository.report.TemplateImportRepository;
+import org.facenet.util.TemplateFileUtil;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Main service for report export orchestration (with dynamic template support)
@@ -25,6 +40,218 @@ public class ReportExportService {
     private final ExcelExportService excelExportService;
     private final WordExportService wordExportService;
     private final PdfExportService pdfExportService;
+    private final TemplateImportRepository templateImportRepository;
+    private final TemplateFileUtil templateFileUtil;
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    
+    // Number format for Vietnamese locale
+    private static final DecimalFormat NUMBER_FORMAT;
+    static {
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols(new Locale("vi", "VN"));
+        symbols.setGroupingSeparator('.');
+        symbols.setDecimalSeparator(',');
+        NUMBER_FORMAT = new DecimalFormat("#,##0.00", symbols);
+    }
+
+    /**
+     * Export report using imported template (NEW APPROACH)
+     * Directly uses template file from template_imports table
+     * Fills data from query results into the template
+     */
+    public byte[] exportReportWithImportedTemplate(ReportExportRequest request, Long importId) 
+            throws IOException, DocumentException {
+        log.info("Exporting report with imported template: importId={}, startTime={}, endTime={}", 
+                importId, request.getStartTime(), request.getEndTime());
+
+        // 1. Get template import record
+        TemplateImport templateImport = templateImportRepository.findById(importId)
+                .orElseThrow(() -> new RuntimeException("Template import not found for importId: " + importId));
+
+        log.info("Found template import: id={}, resourcePath={}, filePath={}", 
+                templateImport.getId(), 
+                templateImport.getResourcePath(), 
+                templateImport.getFilePath());
+
+        // 2. Load template file
+        byte[] templateFile;
+        try {
+            templateFile = templateFileUtil.readTemplateFile(templateImport.getResourcePath());
+            log.info("Loaded template file from resourcePath: {} ({} bytes)", 
+                    templateImport.getOriginalFilename(), templateFile.length);
+        } catch (IOException e) {
+            log.error("Failed to load template from resourcePath: {}, trying absolute filePath: {}", 
+                    templateImport.getResourcePath(), templateImport.getFilePath());
+            
+            // Try to read from absolute file path as fallback
+            try {
+                java.nio.file.Path absolutePath = java.nio.file.Paths.get(templateImport.getFilePath());
+                if (java.nio.file.Files.exists(absolutePath)) {
+                    templateFile = java.nio.file.Files.readAllBytes(absolutePath);
+                    log.info("Loaded template file from absolute path: {} ({} bytes)", 
+                            absolutePath, templateFile.length);
+                } else {
+                    throw new RuntimeException("Template file not found at both resourcePath and filePath: " 
+                            + templateImport.getResourcePath() + " and " + templateImport.getFilePath());
+                }
+            } catch (IOException ex) {
+                throw new RuntimeException("Failed to load template file: " + e.getMessage() 
+                        + ", absolute path also failed: " + ex.getMessage(), ex);
+            }
+        }
+
+        // 3. Query data with filters (using the ReportTemplate to get configuration)
+        ReportTemplate template = templateImport.getTemplate();
+        ReportData reportData = reportTemplateService.buildReportData(template, request);
+        log.info("Queried data: {} rows", reportData.getRows().size());
+
+        // 4. Prepare data model for template
+        Map<String, Object> dataModel = prepareDataModelForTemplate(reportData);
+
+        // 5. Fill data into template using POI-TL (simple configuration without table policy)
+       // Configure config = Configure.builder().build();
+        LoopRowTableRenderPolicy policy = new LoopRowTableRenderPolicy(); // Khởi tạo policy lặp dòng
+        Configure config = Configure.builder()
+                .bind("rows", policy) // Gắn key "rows" với chính sách lặp dòng
+                .build();
+
+        try (ByteArrayInputStream templateStream = new ByteArrayInputStream(templateFile)) {
+            log.info(dataModel.toString());
+            XWPFTemplate xwpfTemplate = XWPFTemplate.compile(templateStream, config).render(dataModel);
+            
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            xwpfTemplate.write(outputStream);
+            xwpfTemplate.close();
+
+            byte[] result = outputStream.toByteArray();
+            log.info("Report exported successfully with template: {} bytes", result.length);
+            return result;
+        }
+    }
+
+    /**
+     * Prepare data model for POI-TL template rendering
+     */
+    private Map<String, Object> prepareDataModelForTemplate(ReportData reportData) {
+        Map<String, Object> model = new HashMap<>();
+
+        // Organization information
+        org.facenet.entity.report.OrganizationSettings org = reportTemplateService.getOrganizationSettings();
+        if (org != null) {
+            model.put("organizationName", org.getCompanyName() != null ? org.getCompanyName() : "");
+            model.put("companyNameEn", org.getCompanyNameEn() != null ? org.getCompanyNameEn() : "");
+            model.put("address", org.getAddress() != null ? org.getAddress() : "");
+            model.put("phone", org.getPhone() != null ? org.getPhone() : "");
+            model.put("email", org.getEmail() != null ? org.getEmail() : "");
+            model.put("taxCode", org.getTaxCode() != null ? org.getTaxCode() : "");
+        }
+
+        // Header information
+        model.put("reportTitle", reportData.getReportTitle());
+        model.put("reportCode", reportData.getReportCode());
+        model.put("exportTime", DATE_TIME_FORMATTER.format(reportData.getExportTime()));
+        model.put("startTime", DATE_FORMATTER.format(reportData.getStartTime()));
+        model.put("endTime", DATE_FORMATTER.format(reportData.getEndTime()));
+        model.put("preparedBy", reportData.getPreparedBy());
+        model.put("currentDateTime", DATE_TIME_FORMATTER.format(java.time.OffsetDateTime.now()));
+
+        // Scale information
+        String scaleNames = reportData.getRows().stream()
+                .map(ReportData.ReportRow::getScaleName)
+                .filter(name -> name != null && !name.isEmpty())
+                .distinct()
+                .collect(Collectors.joining(", "));
+        model.put("scaleNames", scaleNames.isEmpty() ? "Tất cả" : scaleNames);
+
+        // Column names from scale configs
+        model.put("data1Name", reportData.getData1Name() != null ? reportData.getData1Name() : "Data 1");
+        model.put("data2Name", reportData.getData2Name() != null ? reportData.getData2Name() : "Data 2");
+        model.put("data3Name", reportData.getData3Name() != null ? reportData.getData3Name() : "Data 3");
+        model.put("data4Name", reportData.getData4Name() != null ? reportData.getData4Name() : "Data 4");
+        model.put("data5Name", reportData.getData5Name() != null ? reportData.getData5Name() : "Data 5");
+
+        // Data rows for table
+        List<Map<String, Object>> rows = reportData.getRows().stream()
+                .map(this::convertRowToMap)
+                .collect(Collectors.toList());
+        model.put("rows", rows);
+
+        // Summary statistics (nested object for template)
+        Map<String, Object> summary = new HashMap<>();
+        if (reportData.getSummary() != null) {
+            summary.put("totalScales", reportData.getSummary().getTotalScales());
+            summary.put("totalRecords", reportData.getSummary().getTotalRecords());
+            summary.put("data1GrandTotal", NUMBER_FORMAT.format(reportData.getSummary().getData1GrandTotal() != null ? reportData.getSummary().getData1GrandTotal() : 0));
+            summary.put("data2GrandTotal", NUMBER_FORMAT.format(reportData.getSummary().getData2GrandTotal() != null ? reportData.getSummary().getData2GrandTotal() : 0));
+            summary.put("data3GrandTotal", NUMBER_FORMAT.format(reportData.getSummary().getData3GrandTotal() != null ? reportData.getSummary().getData3GrandTotal() : 0));
+            summary.put("data4GrandTotal", NUMBER_FORMAT.format(reportData.getSummary().getData4GrandTotal() != null ? reportData.getSummary().getData4GrandTotal() : 0));
+            summary.put("data5GrandTotal", NUMBER_FORMAT.format(reportData.getSummary().getData5GrandTotal() != null ? reportData.getSummary().getData5GrandTotal() : 0));
+            summary.put("data1Average", NUMBER_FORMAT.format(reportData.getSummary().getData1Average() != null ? reportData.getSummary().getData1Average() : 0));
+            summary.put("data2Average", NUMBER_FORMAT.format(reportData.getSummary().getData2Average() != null ? reportData.getSummary().getData2Average() : 0));
+            summary.put("data3Average", NUMBER_FORMAT.format(reportData.getSummary().getData3Average() != null ? reportData.getSummary().getData3Average() : 0));
+            summary.put("data4Average", NUMBER_FORMAT.format(reportData.getSummary().getData4Average() != null ? reportData.getSummary().getData4Average() : 0));
+            summary.put("data5Average", NUMBER_FORMAT.format(reportData.getSummary().getData5Average() != null ? reportData.getSummary().getData5Average() : 0));
+            summary.put("data1Max", NUMBER_FORMAT.format(reportData.getSummary().getData1Max() != null ? reportData.getSummary().getData1Max() : 0));
+            summary.put("data2Max", NUMBER_FORMAT.format(reportData.getSummary().getData2Max() != null ? reportData.getSummary().getData2Max() : 0));
+            summary.put("data3Max", NUMBER_FORMAT.format(reportData.getSummary().getData3Max() != null ? reportData.getSummary().getData3Max() : 0));
+            summary.put("data4Max", NUMBER_FORMAT.format(reportData.getSummary().getData4Max() != null ? reportData.getSummary().getData4Max() : 0));
+            summary.put("data5Max", NUMBER_FORMAT.format(reportData.getSummary().getData5Max() != null ? reportData.getSummary().getData5Max() : 0));
+            
+            log.debug("Prepared data model: {} rows, {} total records", 
+                    rows.size(), reportData.getSummary().getTotalRecords());
+        } else {
+            summary.put("totalScales", 0);
+            summary.put("totalRecords", rows.size());
+            summary.put("data1GrandTotal", "0");
+            log.debug("Prepared data model: {} rows (no summary)", rows.size());
+        }
+        model.put("summary", summary);
+        
+        // Additional metadata
+        model.put("totalLogs", rows.size());
+        model.put("watermark", "Generated by ScaleHub IoT");
+        model.put("aggregationMethodLabel", reportData.getMetadata() != null && reportData.getMetadata().containsKey("aggregationMethod") 
+                ? reportData.getMetadata().get("aggregationMethod").toString() : "Standard");
+
+        return model;
+    }
+
+    /**
+     * Convert ReportRow to Map for template rendering
+     */
+    private Map<String, Object> convertRowToMap(ReportData.ReportRow row) {
+        Map<String, Object> map = new HashMap<>();
+        
+        // Row number
+        map.put("rowNumber", row.getRowNumber());
+        
+        // Scale information
+        map.put("scaleId", row.getScaleId());
+        map.put("scaleCode", row.getScaleCode());
+        map.put("scaleName", row.getScaleName());
+        map.put("location", row.getLocation());
+        
+        // Period (for time-based grouping)
+        map.put("period", row.getPeriod());
+        
+        // Data totals
+        map.put("data1Total", row.getData1Total() != null ? NUMBER_FORMAT.format(row.getData1Total()) : "0");
+        map.put("data2Total", row.getData2Total() != null ? NUMBER_FORMAT.format(row.getData2Total()) : "0");
+        map.put("data3Total", row.getData3Total() != null ? NUMBER_FORMAT.format(row.getData3Total()) : "0");
+        map.put("data4Total", row.getData4Total() != null ? NUMBER_FORMAT.format(row.getData4Total()) : "0");
+        map.put("data5Total", row.getData5Total() != null ? NUMBER_FORMAT.format(row.getData5Total()) : "0");
+        
+        // Record count
+        map.put("recordCount", row.getRecordCount());
+        
+        // Last time
+        if (row.getLastTime() != null) {
+            map.put("lastTime", DATE_TIME_FORMATTER.format(row.getLastTime()));
+        }
+
+        return map;
+    }
 
     /**
      * Export report based on request (with optional template)

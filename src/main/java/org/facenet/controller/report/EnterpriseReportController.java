@@ -43,9 +43,67 @@ public class EnterpriseReportController {
     private final ReportExportService reportExportService;
 
     /**
-     * Export report by report code (ENTERPRISE STANDARD)
-     * This is the primary method for exporting reports
+     * Export report using imported template (NEW SIMPLIFIED APPROACH)
+     * Uses template from template_imports table directly
+     * No need for report code or report definition
      */
+    @PostMapping("/export")
+    public ResponseEntity<byte[]> exportWithTemplate(
+            @RequestParam(name = "importId", required = true) Long importId,
+            
+            @Valid @RequestBody ReportExportRequest request,
+            
+            HttpServletRequest httpRequest) {
+        
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            log.info("Report export with template import: importId={}, user={}", 
+                    importId, getCurrentUser());
+
+            // 1. Validate importId
+            if (importId == null) {
+                throw new IllegalArgumentException("importId must not be null");
+            }
+            
+            // 2. Export report with template
+            byte[] reportData = reportExportService.exportReportWithImportedTemplate(request, importId);
+            
+            // 3. Generate filename
+            String filename = reportExportService.generateFilename(request);
+            
+            long executionTime = System.currentTimeMillis() - startTime;
+            log.info("Report with template import {} exported successfully: {} bytes, {}ms", 
+                    importId, reportData.length, executionTime);
+            
+            // 4. Return file
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .header("X-Import-Id", importId.toString())
+                    .header("X-Execution-Time-Ms", String.valueOf(executionTime))
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                    .contentLength(reportData.length)
+                    .body(reportData);
+
+        } catch (IllegalArgumentException e) {
+            log.error("Report validation failed: {}", e.getMessage());
+            throw new RuntimeException("Report validation failed: " + e.getMessage(), e);
+            
+        } catch (IOException | DocumentException e) {
+            log.error("Report export failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate report: " + e.getMessage(), e);
+            
+        } catch (Exception e) {
+            log.error("Unexpected error during report export", e);
+            throw new RuntimeException("Report export failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Export report by report code (LEGACY - FOR BACKWARD COMPATIBILITY)
+     * @deprecated Use exportWithTemplate instead
+     */
+    @Deprecated
     @PostMapping("/{reportCode}/export")
     public ResponseEntity<byte[]> exportByCode(
             @PathVariable(name = "reportCode") String reportCode,
