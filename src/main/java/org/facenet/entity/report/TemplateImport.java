@@ -71,11 +71,39 @@ public class TemplateImport extends Auditable {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "template_type", length = 50)
+    private TemplateType templateType;
+
     public enum ImportStatus {
         PENDING,      // File uploaded, waiting for processing
         ACTIVE,       // Successfully imported and in use
         ARCHIVED,     // No longer used but kept for history
         CORRUPTED,    // File integrity check failed
         DELETED       // Marked for deletion
+    }
+
+    public enum TemplateType {
+        SHIFT_REPORT("Báo cáo ca"),
+        WEIGHING_REPORT("Báo cáo cân");
+
+        private final String displayName;
+
+        TemplateType(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public static TemplateType fromDisplayName(String displayName) {
+            for (TemplateType type : values()) {
+                if (type.displayName.equals(displayName)) {
+                    return type;
+                }
+            }
+            return null;
+        }
     }
 }

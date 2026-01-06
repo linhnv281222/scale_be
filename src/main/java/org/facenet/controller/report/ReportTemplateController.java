@@ -104,7 +104,8 @@ public class ReportTemplateController {
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "titleTemplate", required = false) String titleTemplate,
             @RequestParam(value = "importNotes", required = false) String importNotes,
-            @RequestParam(value = "isActive", defaultValue = "true") Boolean isActive) throws IOException {
+            @RequestParam(value = "isActive", defaultValue = "true") Boolean isActive,
+            @RequestParam(value = "templateType", required = false) String templateType) throws IOException {
 
         ReportTemplateDto.TemplateImportRequest request = ReportTemplateDto.TemplateImportRequest.builder()
                 .templateCode(templateCode)
@@ -113,6 +114,7 @@ public class ReportTemplateController {
                 .titleTemplate(titleTemplate)
                 .importNotes(importNotes)
                 .isActive(isActive)
+                .templateType(templateType)
                 .build();
 
         ReportTemplateDto.TemplateImportResponse response = reportTemplateService.importTemplateFile(request, file);

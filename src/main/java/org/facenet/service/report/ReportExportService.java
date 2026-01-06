@@ -108,25 +108,283 @@ public class ReportExportService {
 
         // 4. Prepare data model for template
         Map<String, Object> dataModel = prepareDataModelForTemplate(reportData);
+        
+        // Log detailed data model info for debugging
+        log.info("Data model prepared - rows count: {}", 
+                dataModel.get("rows") instanceof List ? ((List<?>) dataModel.get("rows")).size() : "NOT A LIST");
+        log.info("Data model keys: {}", dataModel.keySet());
+        
+        // Log first row sample if available
+        if (dataModel.get("rows") instanceof List) {
+            List<?> rowsList = (List<?>) dataModel.get("rows");
+            if (!rowsList.isEmpty()) {
+                log.info("First row sample: {}", rowsList.get(0));
+            } else {
+                log.warn("Rows list is EMPTY - no data to export!");
+            }
+        }
 
-        // 5. Fill data into template using POI-TL (simple configuration without table policy)
-       // Configure config = Configure.builder().build();
-        LoopRowTableRenderPolicy policy = new LoopRowTableRenderPolicy(); // Khởi tạo policy lặp dòng
-        Configure config = Configure.builder()
-                .bind("rows", policy) // Gắn key "rows" với chính sách lặp dòng
-                .build();
-
-        try (ByteArrayInputStream templateStream = new ByteArrayInputStream(templateFile)) {
-            log.info(dataModel.toString());
-            XWPFTemplate xwpfTemplate = XWPFTemplate.compile(templateStream, config).render(dataModel);
-            
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            xwpfTemplate.write(outputStream);
-            xwpfTemplate.close();
-
-            byte[] result = outputStream.toByteArray();
-            log.info("Report exported successfully with template: {} bytes", result.length);
+        // 5. Fill data into template - NEW APPROACH: Direct table manipulation
+        // Instead of relying on POI-TL loop tags, we directly insert rows into the table
+        log.info("Using direct table insertion method...");
+        
+        try {
+            byte[] result = renderTemplateWithDirectTableInsertion(templateFile, dataModel);
+            log.info("Report exported successfully with direct table insertion: {} bytes", result.length);
             return result;
+        } catch (Exception e) {
+            log.error("Direct table insertion failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Template rendering failed: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Render template with DIRECT table row insertion
+     * This method finds the table in Word, then directly inserts data rows
+     * Template only needs: Header row + one template row (will be copied and removed)
+     */
+    private byte[] renderTemplateWithDirectTableInsertion(byte[] templateFile, Map<String, Object> dataModel) throws Exception {
+        log.info("Starting direct table insertion method...");
+        
+        try (ByteArrayInputStream templateStream = new ByteArrayInputStream(templateFile);
+             org.apache.poi.xwpf.usermodel.XWPFDocument document = 
+                     new org.apache.poi.xwpf.usermodel.XWPFDocument(templateStream)) {
+            
+            // First: Replace simple placeholders (non-table fields)
+            replaceSimplePlaceholders(document, dataModel);
+            
+            // Second: Insert data rows into table
+            List<?> rowsList = dataModel.get("rows") instanceof List ? (List<?>) dataModel.get("rows") : null;
+            if (rowsList != null && !rowsList.isEmpty()) {
+                insertDataIntoTable(document, rowsList);
+            } else {
+                log.warn("No rows data to insert into table");
+            }
+            
+            // Write output
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            document.write(outputStream);
+            
+            return outputStream.toByteArray();
+        }
+    }
+    
+    /**
+     * Replace simple placeholders in document (headers, footers, non-table fields)
+     */
+    private void replaceSimplePlaceholders(org.apache.poi.xwpf.usermodel.XWPFDocument document, 
+                                           Map<String, Object> dataModel) {
+        // Replace in paragraphs
+        for (org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph : document.getParagraphs()) {
+            replacePlaceholdersInParagraph(paragraph, dataModel);
+        }
+        
+        // Replace in tables (but not data rows - those are handled separately)
+        for (org.apache.poi.xwpf.usermodel.XWPFTable table : document.getTables()) {
+            for (org.apache.poi.xwpf.usermodel.XWPFTableRow row : table.getRows()) {
+                for (org.apache.poi.xwpf.usermodel.XWPFTableCell cell : row.getTableCells()) {
+                    for (org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph : cell.getParagraphs()) {
+                        replacePlaceholdersInParagraph(paragraph, dataModel);
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Replace placeholders in a single paragraph
+     */
+    private void replacePlaceholdersInParagraph(org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph, 
+                                                 Map<String, Object> dataModel) {
+        String text = paragraph.getText();
+        if (text == null || !text.contains("{{")) return;
+        
+        // Replace placeholders
+        for (Map.Entry<String, Object> entry : dataModel.entrySet()) {
+            String key = entry.getKey();
+            if ("rows".equals(key)) continue; // Skip rows - handled separately
+            
+            String placeholder = "{{" + key + "}}";
+            if (text.contains(placeholder)) {
+                Object value = entry.getValue();
+                String replacement = value != null ? value.toString() : "";
+                text = text.replace(placeholder, replacement);
+            }
+        }
+        
+        // Handle nested placeholders (e.g., {{summary.totalRecords}})
+        if (text.contains("{{summary.")) {
+            Object summaryObj = dataModel.get("summary");
+            if (summaryObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> summary = (Map<String, Object>) summaryObj;
+                for (Map.Entry<String, Object> entry : summary.entrySet()) {
+                    String placeholder = "{{summary." + entry.getKey() + "}}";
+                    if (text.contains(placeholder)) {
+                        String replacement = entry.getValue() != null ? entry.getValue().toString() : "";
+                        text = text.replace(placeholder, replacement);
+                    }
+                }
+            }
+        }
+        
+        // Clear and rewrite paragraph
+        if (!text.equals(paragraph.getText())) {
+            while (paragraph.getRuns().size() > 0) {
+                paragraph.removeRun(0);
+            }
+            org.apache.poi.xwpf.usermodel.XWPFRun run = paragraph.createRun();
+            run.setText(text);
+        }
+    }
+    
+    /**
+     * Insert data rows into Word table
+     * Assumes: Row 0 = Header, Row 1 = Template row (to be copied and removed)
+     * NEW: Automatically detects placeholders in template row to map data correctly
+     */
+    private void insertDataIntoTable(org.apache.poi.xwpf.usermodel.XWPFDocument document, List<?> rowsData) {
+        log.info("Inserting {} rows into table", rowsData.size());
+        
+        // Find the first table in document
+        List<org.apache.poi.xwpf.usermodel.XWPFTable> tables = document.getTables();
+        if (tables.isEmpty()) {
+            log.warn("No tables found in document");
+            return;
+        }
+        
+        org.apache.poi.xwpf.usermodel.XWPFTable table = tables.get(0);
+        log.info("Found table with {} rows", table.getNumberOfRows());
+        
+        // Need at least 2 rows: header + template
+        if (table.getNumberOfRows() < 2) {
+            log.error("Table must have at least 2 rows (header + template row)");
+            return;
+        }
+        
+        org.apache.poi.xwpf.usermodel.XWPFTableRow templateRow = table.getRow(1);
+        int numColumns = templateRow.getTableCells().size();
+        log.info("Template row has {} columns", numColumns);
+        
+        // Detect placeholders in template row to determine column mapping
+        String[] columnKeys = detectColumnKeysFromTemplate(templateRow);
+        log.info("Detected column mapping: {}", String.join(", ", columnKeys));
+        
+        // Insert data rows
+        for (int i = 0; i < rowsData.size(); i++) {
+            Object rowObj = rowsData.get(i);
+            if (!(rowObj instanceof Map)) continue;
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rowData = (Map<String, Object>) rowObj;
+            
+            // Insert new row at position (1 + i)
+            org.apache.poi.xwpf.usermodel.XWPFTableRow newRow = table.insertNewTableRow(1 + i);
+            
+            // Create cells matching template
+            for (int j = 0; j < numColumns; j++) {
+                newRow.createCell();
+            }
+            
+            // Fill cells with data using detected column mapping
+            fillRowWithData(newRow, rowData, columnKeys);
+        }
+        
+        // Remove template row (now at position 1 + rowsData.size())
+        table.removeRow(1 + rowsData.size());
+        log.info("Successfully inserted {} data rows and removed template row", rowsData.size());
+    }
+    
+    /**
+     * Detect column keys from placeholders in template row
+     * Reads text from each cell and extracts {{key}} placeholders
+     */
+    private String[] detectColumnKeysFromTemplate(org.apache.poi.xwpf.usermodel.XWPFTableRow templateRow) {
+        List<org.apache.poi.xwpf.usermodel.XWPFTableCell> cells = templateRow.getTableCells();
+        String[] keys = new String[cells.size()];
+        
+        for (int i = 0; i < cells.size(); i++) {
+            String cellText = getCellText(cells.get(i));
+            
+            // Extract placeholder: {{key}}
+            String key = extractPlaceholder(cellText);
+            
+            if (key != null) {
+                keys[i] = key;
+                log.debug("Column {} → key: {}", i, key);
+            } else {
+                // No placeholder found - use default mapping
+                String[] defaultKeys = {"rowNumber", "scaleCode", "scaleName", "location", 
+                                       "data1Total", "data2Total", "data3Total", "data4Total", "data5Total", 
+                                       "recordCount", "period", "lastTime"};
+                keys[i] = i < defaultKeys.length ? defaultKeys[i] : "unknown_" + i;
+                log.debug("Column {} → default key: {} (no placeholder found)", i, keys[i]);
+            }
+        }
+        
+        return keys;
+    }
+    
+    /**
+     * Get all text content from a cell
+     */
+    private String getCellText(org.apache.poi.xwpf.usermodel.XWPFTableCell cell) {
+        StringBuilder text = new StringBuilder();
+        for (org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph : cell.getParagraphs()) {
+            text.append(paragraph.getText());
+        }
+        return text.toString();
+    }
+    
+    /**
+     * Extract placeholder key from text like "{{key}}" or "Some text {{key}} more"
+     * Returns the first placeholder found
+     */
+    private String extractPlaceholder(String text) {
+        if (text == null || !text.contains("{{")) {
+            return null;
+        }
+        
+        int start = text.indexOf("{{");
+        int end = text.indexOf("}}", start);
+        
+        if (start != -1 && end != -1 && end > start + 2) {
+            return text.substring(start + 2, end).trim();
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Fill row cells with data using detected column mapping
+     */
+    private void fillRowWithData(org.apache.poi.xwpf.usermodel.XWPFTableRow row, 
+                                  Map<String, Object> rowData, 
+                                  String[] columnKeys) {
+        List<org.apache.poi.xwpf.usermodel.XWPFTableCell> cells = row.getTableCells();
+        
+        for (int i = 0; i < cells.size() && i < columnKeys.length; i++) {
+            org.apache.poi.xwpf.usermodel.XWPFTableCell cell = cells.get(i);
+            String key = columnKeys[i];
+            Object value = rowData.get(key);
+            String text = value != null ? value.toString() : "";
+            
+            // Set cell text
+            if (cell.getParagraphs().isEmpty()) {
+                cell.addParagraph();
+            }
+            org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph = cell.getParagraphs().get(0);
+            
+            // Clear existing content
+            while (paragraph.getRuns().size() > 0) {
+                paragraph.removeRun(0);
+            }
+            
+            // Add new text
+            org.apache.poi.xwpf.usermodel.XWPFRun run = paragraph.createRun();
+            run.setText(text);
+            
+            log.trace("Cell[{}]: {} = {}", i, key, text);
         }
     }
 

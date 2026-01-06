@@ -82,6 +82,8 @@ public class ReportTemplateDto {
 
         @Builder.Default
         private Boolean isActive = true;
+
+        private String templateType; // "Báo cáo ca" or "Báo cáo cân"
     }
 
     @Data
@@ -100,6 +102,7 @@ public class ReportTemplateDto {
         private OffsetDateTime importDate;
         private String importNotes;
         private Boolean isActive;
+        private String templateType; // "Báo cáo ca" or "Báo cáo cân"
         private String createdBy;
         private OffsetDateTime createdAt;
     }
@@ -117,6 +120,7 @@ public class ReportTemplateDto {
         private String importStatus;
         private OffsetDateTime importDate;
         private Boolean isActive;
+        private String templateType; // "Báo cáo ca" or "Báo cáo cân"
     }
 
     @Data

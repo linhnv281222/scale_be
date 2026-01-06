@@ -1224,6 +1224,7 @@ public class ReportTemplateService {
                     .importDate(OffsetDateTime.now())
                     .importNotes(request.getImportNotes())
                     .isActive(true)
+                    .templateType(parseTemplateType(request.getTemplateType()))
                     .build();
 
             templateImport = templateImportRepository.save(templateImport);
@@ -1405,6 +1406,8 @@ public class ReportTemplateService {
                 .importDate(templateImport.getImportDate())
                 .importNotes(templateImport.getImportNotes())
                 .isActive(templateImport.getIsActive())
+                .templateType(templateImport.getTemplateType() != null ? 
+                        templateImport.getTemplateType().getDisplayName() : null)
                 .createdBy(templateImport.getCreatedBy())
                 .createdAt(templateImport.getCreatedAt())
                 .build();
@@ -1420,7 +1423,23 @@ public class ReportTemplateService {
                 .importStatus(templateImport.getImportStatus().name())
                 .importDate(templateImport.getImportDate())
                 .isActive(templateImport.getIsActive())
+                .templateType(templateImport.getTemplateType() != null ? 
+                        templateImport.getTemplateType().getDisplayName() : null)
                 .build();
+    }
+    
+    /**
+     * Parse template type from display name
+     */
+    private TemplateImport.TemplateType parseTemplateType(String templateType) {
+        if (templateType == null || templateType.trim().isEmpty()) {
+            return null;
+        }
+        TemplateImport.TemplateType type = TemplateImport.TemplateType.fromDisplayName(templateType.trim());
+        if (type == null) {
+            log.warn("Unknown template type: {}, setting to null", templateType);
+        }
+        return type;
     }
 
     public record TemplateFileRecord(String filename, byte[] content, String fileHash) {}
