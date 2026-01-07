@@ -1252,6 +1252,37 @@ public class ReportTemplateService {
     }
 
     /**
+     * Get all imported templates with optional filter by template type
+     */
+    @Transactional(readOnly = true)
+    public List<ReportTemplateDto.TemplateImportListResponse> listImportedTemplates(String templateType) {
+        if (templateType == null || templateType.trim().isEmpty()) {
+            // No filter, return all active templates
+            return templateImportRepository.findByIsActiveTrueOrderByImportDateDesc()
+                    .stream()
+                    .map(this::toTemplateImportListResponse)
+                    .toList();
+        }
+
+        // Parse template type
+        TemplateImport.TemplateType type = TemplateImport.TemplateType.fromDisplayName(templateType);
+        if (type == null) {
+            // Try to parse as enum name
+            try {
+                type = TemplateImport.TemplateType.valueOf(templateType.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException("Invalid template type: " + templateType + 
+                    ". Valid values: SHIFT_REPORT, WEIGHING_REPORT, Báo cáo ca, Báo cáo cân");
+            }
+        }
+
+        return templateImportRepository.findByIsActiveTrueAndTemplateTypeOrderByImportDateDesc(type)
+                .stream()
+                .map(this::toTemplateImportListResponse)
+                .toList();
+    }
+
+    /**
      * Get imported template details
      */
     @Transactional(readOnly = true)

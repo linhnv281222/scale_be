@@ -95,27 +95,12 @@ public class ReportTemplateController {
     /**
      * Import template file from resources
      * POST /api/v1/report-templates/import
+     * Request body: JSON payload with template metadata + file as multipart
      */
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ReportTemplateDto.TemplateImportResponse>> importTemplate(
             @RequestPart("file") MultipartFile file,
-            @RequestParam("templateCode") String templateCode,
-            @RequestParam("templateName") String templateName,
-            @RequestParam(value = "description", required = false) String description,
-            @RequestParam(value = "titleTemplate", required = false) String titleTemplate,
-            @RequestParam(value = "importNotes", required = false) String importNotes,
-            @RequestParam(value = "isActive", defaultValue = "true") Boolean isActive,
-            @RequestParam(value = "templateType", required = false) String templateType) throws IOException {
-
-        ReportTemplateDto.TemplateImportRequest request = ReportTemplateDto.TemplateImportRequest.builder()
-                .templateCode(templateCode)
-                .templateName(templateName)
-                .description(description)
-                .titleTemplate(titleTemplate)
-                .importNotes(importNotes)
-                .isActive(isActive)
-                .templateType(templateType)
-                .build();
+            @RequestPart("data") @Valid ReportTemplateDto.TemplateImportRequest request) throws IOException {
 
         ReportTemplateDto.TemplateImportResponse response = reportTemplateService.importTemplateFile(request, file);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -129,6 +114,18 @@ public class ReportTemplateController {
     @GetMapping("/imports")
     public ResponseEntity<ApiResponse<List<ReportTemplateDto.TemplateImportListResponse>>> listImportedTemplates() {
         List<ReportTemplateDto.TemplateImportListResponse> imports = reportTemplateService.listImportedTemplates();
+        return ResponseEntity.ok(ApiResponse.success(imports));
+    }
+
+    /**
+     * List all imported templates with filter by template type
+     * GET /api/v1/report-templates/imports/list
+     * @param templateType - Optional filter: "SHIFT_REPORT", "WEIGHING_REPORT", "Báo cáo ca", or "Báo cáo cân"
+     */
+    @GetMapping("/imports/list")
+    public ResponseEntity<ApiResponse<List<ReportTemplateDto.TemplateImportListResponse>>> listImportedTemplatesWithFilter(
+            @RequestParam(name = "templateType", required = false) String templateType) {
+        List<ReportTemplateDto.TemplateImportListResponse> imports = reportTemplateService.listImportedTemplates(templateType);
         return ResponseEntity.ok(ApiResponse.success(imports));
     }
 

@@ -38,6 +38,11 @@ public interface TemplateImportRepository extends JpaRepository<TemplateImport, 
     List<TemplateImport> findByIsActiveTrueOrderByImportDateDesc();
 
     /**
+     * Find all active imports by template type
+     */
+    List<TemplateImport> findByIsActiveTrueAndTemplateTypeOrderByImportDateDesc(TemplateImport.TemplateType templateType);
+
+    /**
      * Find by import status
      */
     List<TemplateImport> findByImportStatusOrderByImportDateDesc(TemplateImport.ImportStatus status);
