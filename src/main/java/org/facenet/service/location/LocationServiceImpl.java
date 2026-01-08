@@ -20,6 +20,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 
 /**
  * Service implementation for Location operations
+ * Implements 5 core operations: GetList, GetById, Create, Update, Delete
  */
 @Service
 @RequiredArgsConstructor
@@ -46,23 +48,16 @@ public class LocationServiceImpl implements LocationService {
         
         if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
             Specification<Location> searchSpec = spec.buildSearchSpecification(
-                pageRequest.getSearch(), "name", "code", "address", "description"
+                pageRequest.getSearch(), "name", "code", "description"
             );
             specification = specification.and(searchSpec);
         }
         
         PageRequest springPageRequest = pageRequest.toPageRequest();
         Page<Location> page = locationRepository.findAll(specification, springPageRequest);
-        Page<LocationDto.Response> responsePage = page.map(LocationMapper::toResponseDto);
+        Page<LocationDto.Response> responsePage = page.map(LocationMapper::toFlatResponseDto);
         
         return PageResponseDto.from(responsePage);
-    }
-
-    @Override
-    @Cacheable(value = "locations")
-    public List<LocationDto.Response> getAllLocations() {
-        List<Location> locations = locationRepository.findAll();
-        return LocationMapper.toResponseDtoList(locations);
     }
 
     @Override
@@ -74,7 +69,7 @@ public class LocationServiceImpl implements LocationService {
 
     @Override
     @Cacheable(value = "locations", key = "#id")
-    public LocationDto.Response getLocationById(Long id) {
+    public LocationDto.Response getLocationById(@Param("id") Long id) {
         Location location = locationRepository.findByIdWithChildren(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
         return LocationMapper.toResponseDto(location);

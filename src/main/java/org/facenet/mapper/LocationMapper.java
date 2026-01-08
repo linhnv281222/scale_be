@@ -11,6 +11,9 @@ import java.util.stream.Collectors;
  */
 public class LocationMapper {
 
+    /**
+     * Convert Location to Response DTO with children (for tree structure)
+     */
     public static LocationDto.Response toResponseDto(Location location) {
         if (location == null) return null;
         return LocationDto.Response.builder()
@@ -22,6 +25,24 @@ public class LocationMapper {
                     location.getChildren().stream()
                         .map(LocationMapper::toResponseDto)
                         .collect(Collectors.toList()) : null)
+                .createdAt(location.getCreatedAt())
+                .createdBy(location.getCreatedBy())
+                .updatedAt(location.getUpdatedAt())
+                .updatedBy(location.getUpdatedBy())
+                .build();
+    }
+
+    /**
+     * Convert Location to flat Response DTO without children (for paginated list)
+     */
+    public static LocationDto.Response toFlatResponseDto(Location location) {
+        if (location == null) return null;
+        return LocationDto.Response.builder()
+                .id(location.getId())
+                .code(location.getCode())
+                .name(location.getName())
+                .parentId(location.getParent() != null ? location.getParent().getId() : null)
+                .children(null) // No children for flat list
                 .createdAt(location.getCreatedAt())
                 .createdBy(location.getCreatedBy())
                 .updatedAt(location.getUpdatedAt())

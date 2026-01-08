@@ -9,18 +9,14 @@ import java.util.Map;
 
 /**
  * Service interface for Location operations
+ * Supports 5 core operations: GetList, GetById, Create, Update, Delete
  */
 public interface LocationService {
 
     /**
-     * Get all locations with pagination and filters
+     * Get all locations with pagination and filters (flat list)
      */
     PageResponseDto<LocationDto.Response> getAllLocations(PageRequestDto pageRequest, Map<String, String> filters);
-
-    /**
-     * Get all locations (flat list, non-paginated)
-     */
-    List<LocationDto.Response> getAllLocations();
 
     /**
      * Get locations in tree structure

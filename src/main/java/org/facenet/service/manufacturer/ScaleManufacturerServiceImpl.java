@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.common.exception.AlreadyExistsException;
 import org.facenet.common.exception.ResourceNotFoundException;
-import org.facenet.common.exception.ValidationException;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.specification.GenericSpecification;
@@ -21,11 +20,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * Service implementation for ScaleManufacturer operations
+ * Implements 5 core operations: GetList, GetById, Create, Update, Delete
  */
 @Service
 @RequiredArgsConstructor
@@ -58,22 +57,6 @@ public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
     }
 
     @Override
-    @Cacheable(value = "manufacturers")
-    public List<ScaleManufacturerDto.Response> getAllManufacturers() {
-        log.debug("Getting all manufacturers");
-        List<ScaleManufacturer> manufacturers = manufacturerRepository.findAll();
-        return ScaleManufacturerMapper.toResponseDtoList(manufacturers);
-    }
-
-    @Override
-    @Cacheable(value = "activeManufacturers")
-    public List<ScaleManufacturerDto.Response> getAllActiveManufacturers() {
-        log.debug("Getting all active manufacturers");
-        List<ScaleManufacturer> manufacturers = manufacturerRepository.findAllActive();
-        return ScaleManufacturerMapper.toResponseDtoList(manufacturers);
-    }
-
-    @Override
     @Cacheable(value = "manufacturers", key = "#id")
     public ScaleManufacturerDto.Response getManufacturerById(Long id) {
         log.debug("Getting manufacturer by id: {}", id);
@@ -83,20 +66,9 @@ public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
     }
 
     @Override
-    public List<ScaleManufacturerDto.Response> searchManufacturers(String search) {
-        log.debug("Searching manufacturers with keyword: {}", search);
-        if (search == null || search.isBlank()) {
-            return getAllManufacturers();
-        }
-        List<ScaleManufacturer> manufacturers = manufacturerRepository.searchByNameOrCode(search);
-        return ScaleManufacturerMapper.toResponseDtoList(manufacturers);
-    }
-
-    @Override
     @Transactional
     @Caching(evict = {
-        @CacheEvict(value = "manufacturers", allEntries = true),
-        @CacheEvict(value = "activeManufacturers", allEntries = true)
+        @CacheEvict(value = "manufacturers", allEntries = true)
     })
     public ScaleManufacturerDto.Response createManufacturer(ScaleManufacturerDto.Request request) {
         log.debug("Creating manufacturer with code: {}", request.getCode());
@@ -128,8 +100,7 @@ public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "manufacturers", key = "#id"),
-        @CacheEvict(value = "manufacturers", allEntries = true),
-        @CacheEvict(value = "activeManufacturers", allEntries = true)
+        @CacheEvict(value = "manufacturers", allEntries = true)
     })
     public ScaleManufacturerDto.Response updateManufacturer(Long id, ScaleManufacturerDto.Request request) {
         log.debug("Updating manufacturer with id: {}", id);
@@ -168,8 +139,7 @@ public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "manufacturers", key = "#id"),
-        @CacheEvict(value = "manufacturers", allEntries = true),
-        @CacheEvict(value = "activeManufacturers", allEntries = true)
+        @CacheEvict(value = "manufacturers", allEntries = true)
     })
     public void deleteManufacturer(Long id) {
         log.debug("Deleting manufacturer with id: {}", id);
@@ -178,30 +148,8 @@ public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
                 .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", id));
 
         // TODO: Check if manufacturer is used by any scales before deleting
-        // This would require adding relationship with Scale entity
         
         manufacturerRepository.delete(manufacturer);
         log.info("Deleted manufacturer with id: {}", id);
-    }
-
-    @Override
-    @Transactional
-    @Caching(evict = {
-        @CacheEvict(value = "manufacturers", key = "#id"),
-        @CacheEvict(value = "manufacturers", allEntries = true),
-        @CacheEvict(value = "activeManufacturers", allEntries = true)
-    })
-    public ScaleManufacturerDto.Response toggleActiveStatus(Long id) {
-        log.debug("Toggling active status for manufacturer with id: {}", id);
-        
-        ScaleManufacturer manufacturer = manufacturerRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", id));
-
-        manufacturer.setIsActive(!manufacturer.getIsActive());
-        manufacturer = manufacturerRepository.save(manufacturer);
-        
-        log.info("Toggled active status for manufacturer with id: {} to {}", id, manufacturer.getIsActive());
-        
-        return ScaleManufacturerMapper.toResponseDto(manufacturer);
     }
 }

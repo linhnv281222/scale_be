@@ -14,11 +14,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * Controller for Protocol operations
+ * Contains exactly 5 APIs: Create, Update, Delete, GetById, GetList
  */
 @RestController
 @RequestMapping("/protocols")
@@ -29,35 +29,30 @@ public class ProtocolController {
     private final ProtocolService protocolService;
 
     /**
-     * Get all protocols with pagination and filters
-     * Supports filters: connectionType, isActive, code, name
-     * Examples:
-     * - /protocols?connectionType=TCP&isActive=true
-     * - /protocols?code_like=MODBUS&page=0&size=10
+     * 1. Get all protocols with pagination and filters
+     * Supports:
+     * - search: Search by name, code, description
+     * - code: Filter by exact code
+     * - connectionType: Filter by connection type
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get all protocols", description = "Retrieve all protocols with pagination and filters. Supports: connectionType, isActive, code, name, defaultPort")
+    @Operation(summary = "Get all protocols", 
+               description = "Get list of protocols with pagination. Supports search (name/code/description), filter by code and connectionType")
     public ResponseEntity<ApiResponse<PageResponseDto<ProtocolDto.Response>>> getAllProtocols(
             @RequestParam(value = "page", defaultValue = "0") Integer page,
             @RequestParam(value = "size", defaultValue = "10") Integer size,
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "search", required = false) String search,
-            @RequestParam(value = "connectionType", required = false) String connectionType,
-            @RequestParam(value = "isActive", required = false) Boolean isActive,
-            @RequestParam(required = false) Map<String, String> allParams) {
+            @RequestParam(value = "code", required = false) String code,
+            @RequestParam(value = "connectionType", required = false) String connectionType) {
         
-        Map<String, String> filters = new java.util.HashMap<>(allParams);
-        filters.remove("page");
-        filters.remove("size");
-        filters.remove("sort");
-        filters.remove("search");
-        
+        Map<String, String> filters = new java.util.HashMap<>();
+        if (code != null) {
+            filters.put("code", code);
+        }
         if (connectionType != null) {
             filters.put("connectionType", connectionType);
-        }
-        if (isActive != null) {
-            filters.put("isActive", isActive.toString());
         }
         
         PageRequestDto pageRequest = PageRequestDto.builder()
@@ -72,34 +67,7 @@ public class ProtocolController {
     }
 
     /**
-     * Get all protocols without pagination
-     */
-    @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get all protocols", description = "Retrieve all protocols without pagination. Supports same filters")
-    public ResponseEntity<ApiResponse<List<ProtocolDto.Response>>> getAllProtocolsList(
-            @RequestParam(value = "connectionType", required = false) String connectionType,
-            @RequestParam(value = "isActive", required = false) Boolean isActive) {
-        
-        if (connectionType == null && isActive == null) {
-            return ResponseEntity.ok(ApiResponse.success(protocolService.getAllProtocols()));
-        }
-        
-        Map<String, String> filters = new java.util.HashMap<>();
-        if (connectionType != null) {
-            filters.put("connectionType", connectionType);
-        }
-        if (isActive != null) {
-            filters.put("isActive", isActive.toString());
-        }
-        
-        PageRequestDto pageRequest = PageRequestDto.builder().page(0).size(10000).build();
-        PageResponseDto<ProtocolDto.Response> result = protocolService.getAllProtocols(pageRequest, filters);
-        return ResponseEntity.ok(ApiResponse.success(result.getContent()));
-    }
-
-    /**
-     * Get protocol by ID
+     * 2. Get protocol by ID
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
@@ -111,19 +79,7 @@ public class ProtocolController {
     }
 
     /**
-     * Get protocol by code
-     */
-    @GetMapping("/code/{code}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get protocol by code", description = "Retrieve a protocol by its code")
-    public ResponseEntity<ApiResponse<ProtocolDto.Response>> getProtocolByCode(
-            @PathVariable("code") String code) {
-        ProtocolDto.Response protocol = protocolService.getProtocolByCode(code);
-        return ResponseEntity.ok(ApiResponse.success(protocol));
-    }
-
-    /**
-     * Create a new protocol
+     * 3. Create a new protocol
      */
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN')")
@@ -135,7 +91,7 @@ public class ProtocolController {
     }
 
     /**
-     * Update protocol
+     * 4. Update protocol
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN')")
@@ -148,7 +104,7 @@ public class ProtocolController {
     }
 
     /**
-     * Delete protocol
+     * 5. Delete protocol
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN')")
@@ -157,17 +113,5 @@ public class ProtocolController {
             @PathVariable("id") Long id) {
         protocolService.deleteProtocol(id);
         return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Toggle protocol active status
-     */
-    @PatchMapping("/{id}/toggle-active")
-    @PreAuthorize("hasAnyRole('ADMIN')")
-    @Operation(summary = "Toggle protocol status", description = "Toggle the active status of a protocol")
-    public ResponseEntity<ApiResponse<ProtocolDto.Response>> toggleActiveStatus(
-            @PathVariable("id") Long id) {
-        ProtocolDto.Response protocol = protocolService.toggleActiveStatus(id);
-        return ResponseEntity.ok(ApiResponse.success(protocol));
     }
 }

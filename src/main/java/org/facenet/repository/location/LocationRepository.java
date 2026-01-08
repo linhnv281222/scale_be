@@ -4,6 +4,7 @@ import org.facenet.entity.location.Location;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -30,5 +31,5 @@ public interface LocationRepository extends JpaRepository<Location, Long>, JpaSp
      * Find location with children eagerly loaded
      */
     @Query("SELECT l FROM Location l LEFT JOIN FETCH l.children WHERE l.id = :id")
-    Optional<Location> findByIdWithChildren(Long id);
+    Optional<Location> findByIdWithChildren(@Param("id") Long id);
 }

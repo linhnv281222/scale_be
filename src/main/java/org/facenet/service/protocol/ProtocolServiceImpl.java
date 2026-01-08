@@ -20,11 +20,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * Service implementation for Protocol operations
+ * Implements 5 core operations: GetList, GetById, Create, Update, Delete
  */
 @Service
 @RequiredArgsConstructor
@@ -45,7 +45,7 @@ public class ProtocolServiceImpl implements ProtocolService {
         // Add search specification if search keyword is provided
         if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
             Specification<Protocol> searchSpec = spec.buildSearchSpecification(
-                pageRequest.getSearch(), "name", "code", "description", "connectionType"
+                pageRequest.getSearch(), "name", "code", "description"
             );
             specification = specification.and(searchSpec);
         }
@@ -58,22 +58,6 @@ public class ProtocolServiceImpl implements ProtocolService {
     }
 
     @Override
-    @Cacheable(value = "protocols")
-    public List<ProtocolDto.Response> getAllProtocols() {
-        log.debug("Getting all protocols");
-        List<Protocol> protocols = protocolRepository.findAll();
-        return ProtocolMapper.toResponseDtoList(protocols);
-    }
-
-    @Override
-    @Cacheable(value = "activeProtocols")
-    public List<ProtocolDto.Response> getAllActiveProtocols() {
-        log.debug("Getting all active protocols");
-        List<Protocol> protocols = protocolRepository.findAllActive();
-        return ProtocolMapper.toResponseDtoList(protocols);
-    }
-
-    @Override
     @Cacheable(value = "protocols", key = "#id")
     public ProtocolDto.Response getProtocolById(Long id) {
         log.debug("Getting protocol by id: {}", id);
@@ -83,36 +67,9 @@ public class ProtocolServiceImpl implements ProtocolService {
     }
 
     @Override
-    @Cacheable(value = "protocols", key = "#code")
-    public ProtocolDto.Response getProtocolByCode(String code) {
-        log.debug("Getting protocol by code: {}", code);
-        Protocol protocol = protocolRepository.findByCode(code)
-                .orElseThrow(() -> new ResourceNotFoundException("Protocol", "code", code));
-        return ProtocolMapper.toResponseDto(protocol);
-    }
-
-    @Override
-    public List<ProtocolDto.Response> searchProtocols(String search) {
-        log.debug("Searching protocols with keyword: {}", search);
-        if (search == null || search.isBlank()) {
-            return getAllProtocols();
-        }
-        List<Protocol> protocols = protocolRepository.searchByNameOrCode(search);
-        return ProtocolMapper.toResponseDtoList(protocols);
-    }
-
-    @Override
-    public List<ProtocolDto.Response> getProtocolsByConnectionType(String connectionType) {
-        log.debug("Getting protocols by connection type: {}", connectionType);
-        List<Protocol> protocols = protocolRepository.findByConnectionType(connectionType);
-        return ProtocolMapper.toResponseDtoList(protocols);
-    }
-
-    @Override
     @Transactional
     @Caching(evict = {
-        @CacheEvict(value = "protocols", allEntries = true),
-        @CacheEvict(value = "activeProtocols", allEntries = true)
+        @CacheEvict(value = "protocols", allEntries = true)
     })
     public ProtocolDto.Response createProtocol(ProtocolDto.Request request) {
         log.debug("Creating protocol with code: {}", request.getCode());
@@ -143,8 +100,7 @@ public class ProtocolServiceImpl implements ProtocolService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "protocols", key = "#id"),
-        @CacheEvict(value = "protocols", allEntries = true),
-        @CacheEvict(value = "activeProtocols", allEntries = true)
+        @CacheEvict(value = "protocols", allEntries = true)
     })
     public ProtocolDto.Response updateProtocol(Long id, ProtocolDto.Request request) {
         log.debug("Updating protocol with id: {}", id);
@@ -182,8 +138,7 @@ public class ProtocolServiceImpl implements ProtocolService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "protocols", key = "#id"),
-        @CacheEvict(value = "protocols", allEntries = true),
-        @CacheEvict(value = "activeProtocols", allEntries = true)
+        @CacheEvict(value = "protocols", allEntries = true)
     })
     public void deleteProtocol(Long id) {
         log.debug("Deleting protocol with id: {}", id);
@@ -195,26 +150,5 @@ public class ProtocolServiceImpl implements ProtocolService {
         
         protocolRepository.delete(protocol);
         log.info("Deleted protocol with id: {}", id);
-    }
-
-    @Override
-    @Transactional
-    @Caching(evict = {
-        @CacheEvict(value = "protocols", key = "#id"),
-        @CacheEvict(value = "protocols", allEntries = true),
-        @CacheEvict(value = "activeProtocols", allEntries = true)
-    })
-    public ProtocolDto.Response toggleActiveStatus(Long id) {
-        log.debug("Toggling active status for protocol with id: {}", id);
-        
-        Protocol protocol = protocolRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Protocol", "id", id));
-
-        protocol.setIsActive(!protocol.getIsActive());
-        protocol = protocolRepository.save(protocol);
-        
-        log.info("Toggled active status for protocol with id: {} to {}", id, protocol.getIsActive());
-        
-        return ProtocolMapper.toResponseDto(protocol);
     }
 }
