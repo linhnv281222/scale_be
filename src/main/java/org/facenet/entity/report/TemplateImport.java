@@ -85,7 +85,8 @@ public class TemplateImport extends Auditable {
 
     public enum TemplateType {
         SHIFT_REPORT("Báo cáo ca"),
-        WEIGHING_REPORT("Báo cáo cân");
+        WEIGHING_REPORT("Báo cáo cân"),
+        WEIGHING_SLIP("Phiếu cân");
 
         private final String displayName;
 
@@ -98,12 +99,21 @@ public class TemplateImport extends Auditable {
         }
 
         public static TemplateType fromDisplayName(String displayName) {
+            if (displayName == null || displayName.trim().isEmpty()) {
+                return null;
+            }
+            // Try exact match with display name first
             for (TemplateType type : values()) {
-                if (type.displayName.equals(displayName)) {
+                if (type.displayName.equalsIgnoreCase(displayName.trim())) {
                     return type;
                 }
             }
-            return null;
+            // Try match with enum name
+            try {
+                return TemplateType.valueOf(displayName.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
         }
     }
 }
