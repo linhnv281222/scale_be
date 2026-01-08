@@ -66,7 +66,8 @@ public class SecurityConfig {
                 "http://103.82.27.132:*",
                 "http://103.82.27.132:*",
                 "http://103.82.27.132:5173",
-                "http://103.82.27.132:8080"
+                "http://103.82.27.132:8080",
+                "http://127.0.0.1:5500"
 
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));

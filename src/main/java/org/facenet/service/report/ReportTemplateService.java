@@ -522,10 +522,8 @@ public class ReportTemplateService {
 
         IntervalReportRequestDto intervalRequest = IntervalReportRequestDto.builder()
                 .scaleIds(request.getScaleIds())
-                .fromDate(startTime.toLocalDate())
-                .toDate(endTime.toLocalDate())
-            .fromTime(startTime)
-            .toTime(endTime)
+                .fromTime(startTime)
+                .toTime(endTime)
                 .interval(interval)
                 .aggregationByField(aggregationByField)
                 .build();

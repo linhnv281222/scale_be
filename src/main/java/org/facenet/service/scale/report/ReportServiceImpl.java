@@ -65,7 +65,7 @@ public class ReportServiceImpl implements ReportService {
     public IntervalReportResponseDto generateIntervalReport(IntervalReportRequestDto request) {
         validateIntervalRequest(request);
 
-        List<Long> scaleIdsUsed = resolveScaleIdsForIntervalReport(request.getScaleIds());
+        List<Long> scaleIdsUsed = resolveScaleIdsForIntervalReport(request);
         Map<Long, Map<String, DataFieldMeta>> metaByScaleId = resolveDataFieldMetaByScale(scaleIdsUsed);
         Map<String, Set<Long>> cumulativeScaleIdsByField = resolveCumulativeWeightScaleIdsByField(metaByScaleId);
 
@@ -89,23 +89,51 @@ public class ReportServiceImpl implements ReportService {
             methodStrings.put(e.getKey(), e.getValue().name());
         }
 
+        // Build response with appropriate date/time format
+        String fromDateStr = request.getFromTime() != null 
+            ? request.getFromTime().toString() 
+            : request.getFromDate().toString();
+        String toDateStr = request.getToTime() != null 
+            ? request.getToTime().toString() 
+            : request.getToDate().toString();
+        
         return IntervalReportResponseDto.builder()
                 .interval(request.getInterval())
-                .fromDate(request.getFromDate().toString())
-                .toDate(request.getToDate().toString())
+                .fromDate(fromDateStr)
+                .toDate(toDateStr)
                 .dataFieldNames(sampleNames)
                 .aggregationByField(methodStrings)
                 .rows(rows)
                 .build();
     }
 
-    private List<Long> resolveScaleIdsForIntervalReport(List<Long> requestedScaleIds) {
-        if (requestedScaleIds != null && !requestedScaleIds.isEmpty()) {
-            return requestedScaleIds;
+    private List<Long> resolveScaleIdsForIntervalReport(IntervalReportRequestDto request) {
+        // Build WHERE conditions
+        List<String> conditions = new ArrayList<>();
+        conditions.add("is_active = true");
+        
+        // Add filters if provided
+        if (request.getManufacturerId() != null) {
+            conditions.add("manufacturer_id = " + request.getManufacturerId());
         }
-
-        // Default: all active scales
-        return jdbcTemplate.queryForList("SELECT id FROM scales WHERE is_active = true", Long.class);
+        if (request.getLocationId() != null) {
+            conditions.add("location_id = " + request.getLocationId());
+        }
+        if (request.getDirection() != null && !request.getDirection().isBlank()) {
+            conditions.add("direction = '" + request.getDirection().toUpperCase() + "'");
+        }
+        
+        String whereClause = String.join(" AND ", conditions);
+        String sql = "SELECT id FROM scales WHERE " + whereClause;
+        
+        List<Long> filteredScaleIds = jdbcTemplate.queryForList(sql, Long.class);
+        
+        // If specific scaleIds are requested, intersect with filtered results
+        if (request.getScaleIds() != null && !request.getScaleIds().isEmpty()) {
+            filteredScaleIds.retainAll(request.getScaleIds());
+        }
+        
+        return filteredScaleIds;
     }
 
     private Map<String, String> defaultDataFieldNames() {
@@ -288,12 +316,25 @@ public class ReportServiceImpl implements ReportService {
         if (request == null) {
             throw new IllegalArgumentException("request must not be null");
         }
-        if (request.getFromDate() == null || request.getToDate() == null) {
-            throw new IllegalArgumentException("fromDate and toDate are required");
+        
+        // Check if at least one time range pair is provided
+        boolean hasDateRange = request.getFromDate() != null && request.getToDate() != null;
+        boolean hasTimeRange = request.getFromTime() != null && request.getToTime() != null;
+        
+        if (!hasDateRange && !hasTimeRange) {
+            throw new IllegalArgumentException("Either fromDate/toDate or fromTime/toTime must be provided");
         }
-        if (request.getFromDate().isAfter(request.getToDate())) {
+        
+        // Validate date range if provided
+        if (hasDateRange && request.getFromDate().isAfter(request.getToDate())) {
             throw new IllegalArgumentException("fromDate must be <= toDate");
         }
+        
+        // Validate time range if provided
+        if (hasTimeRange && request.getFromTime().isAfter(request.getToTime())) {
+            throw new IllegalArgumentException("fromTime must be <= toTime");
+        }
+        
         if (request.getInterval() == null) {
             throw new IllegalArgumentException("interval is required");
         }

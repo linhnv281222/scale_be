@@ -45,6 +45,7 @@ public class ScaleReportController {
 
     /**
      * Generate interval statistics report (SHIFT/HOUR/DAY/WEEK) with per-field aggregation.
+     * Supports filtering by manufacturer, location, and scale direction.
      */
     @PostMapping("/interval")
     public ResponseEntity<ApiResponse<IntervalReportResponseDto>> generateIntervalReport(

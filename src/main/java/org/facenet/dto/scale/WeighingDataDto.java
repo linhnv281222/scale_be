@@ -85,4 +85,34 @@ public class WeighingDataDto {
         private Integer page;
         private Integer size;
     }
+
+    /**
+     * Response DTO for weighing history with scale details
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class HistoryResponse {
+        private Long scaleId;
+        private String scaleCode;
+        private String scaleName;
+        private String scaleDirection;
+        private String locationName;
+        private String protocolName;
+        private OffsetDateTime createdAt;
+        private OffsetDateTime lastTime;
+        private String data1;
+        private String data2;
+        private String data3;
+        private String data4;
+        private String data5;
+        
+        /**
+         * Map data field to {value, name, isUsed} derived from scale_config.
+         * Keys are: data_1 .. data_5
+         */
+        private Map<String, DataFieldValue> dataValues;
+    }
 }

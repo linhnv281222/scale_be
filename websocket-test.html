@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Events Test - Scale Hub IoT</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .connection-panel {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .status-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #e74c3c;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #27ae60;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        button.connect {
+            background: #27ae60;
+            color: white;
+        }
+
+        button.disconnect {
+            background: #e74c3c;
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .event-box {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .event-box h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .event-count {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .event-item {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .event-item.alert-critical {
+            border-left-color: #e74c3c;
+            background: #fee;
+        }
+
+        .event-item.alert-warning {
+            border-left-color: #f39c12;
+            background: #ffeaa7;
+        }
+
+        .event-item.alert-recovery {
+            border-left-color: #27ae60;
+            background: #d5f4e6;
+        }
+
+        .timestamp {
+            color: #7f8c8d;
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+
+        .scale-info {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .data-fields {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .data-field {
+            background: white;
+            padding: 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .data-field .label {
+            color: #7f8c8d;
+            font-size: 10px;
+        }
+
+        .data-field .value {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .clear-btn {
+            background: #95a5a6;
+            color: white;
+            padding: 5px 10px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            overflow-x: auto;
+            margin-top: 8px;
+        }
+
+        .alert-summary {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .alert-stat {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .alert-stat .count {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .alert-stat .label {
+            font-size: 10px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #dfe6e9;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .scale-selector {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .scale-selector input {
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket Events Test - Scale Hub IoT</h1>
+
+        <!-- Connection Panel -->
+        <div class="connection-panel">
+            <div class="connection-status">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span id="statusText">Disconnected</span>
+                <button class="connect" id="connectBtn" onclick="connect()">Connect</button>
+                <button class="disconnect" id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            </div>
+            <div class="input-group">
+                <input type="text" id="wsUrl" value="http://localhost:8080/api/v1/ws-scalehub" placeholder="WebSocket URL">
+            </div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="event-box">
+            <h2>📊 Scale Summary <span class="event-count" id="summaryCount">0</span></h2>
+            <div class="summary-stats">
+                <div class="stat-card">
+                    <div class="number" id="totalScales">0</div>
+                    <div class="label">Total Scales</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="activeScales">0</div>
+                    <div class="label">Active</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="onlineScales">0</div>
+                    <div class="label">Online</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="offlineScales">0</div>
+                    <div class="label">Offline</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Events Grid -->
+        <div class="grid">
+            <!-- All Scales Events -->
+            <div class="event-box">
+                <h2>📡 /topic/scales <span class="event-count" id="scalesCount">0</span>
+                    <button class="clear-btn" onclick="clearEvents('scalesEvents')">Clear</button>
+                </h2>
+                <div id="scalesEvents"></div>
+            </div>
+
+            <!-- Specific Scale Events -->
+            <div class="event-box">
+                <h2>🎯 /topic/scale/{id} <span class="event-count" id="scaleSpecificCount">0</span>
+                    <button class="clear-btn" onclick="clearEvents('scaleSpecificEvents')">Clear</button>
+                </h2>
+                <div class="scale-selector">
+                    <input type="number" id="scaleIdInput" placeholder="Scale ID" value="1">
+                    <button onclick="subscribeToSpecificScale()">Subscribe</button>
+                    <button onclick="unsubscribeFromSpecificScale()">Unsubscribe</button>
+                </div>
+                <div id="scaleSpecificEvents"></div>
+            </div>
+
+            <!-- All Scales Data Snapshot -->
+            <div class="event-box">
+                <h2>📸 /topic/all-scales-data <span class="event-count" id="snapshotCount">0</span>
+                    <button class="clear-btn" onclick="clearEvents('snapshotEvents')">Clear</button>
+                </h2>
+                <div id="snapshotEvents"></div>
+            </div>
+
+            <!-- Alerts -->
+            <div class="event-box">
+                <h2>🚨 /topic/scale-alerts <span class="event-count" id="alertsCount">0</span>
+                    <button class="clear-btn" onclick="clearEvents('alertsEvents')">Clear</button>
+                </h2>
+                <div id="alertsEvents"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let specificScaleSubscription = null;
+        let currentScaleId = null;
+
+        // Counters
+        let counters = {
+            scales: 0,
+            scaleSpecific: 0,
+            summary: 0,
+            snapshot: 0,
+            alerts: 0
+        };
+
+        function connect() {
+            const wsUrl = document.getElementById('wsUrl').value;
+            const socket = new SockJS(wsUrl);
+            stompClient = Stomp.over(socket);
+
+            stompClient.connect({}, function(frame) {
+                console.log('Connected: ' + frame);
+                updateConnectionStatus(true);
+
+                // Subscribe to all topics
+                subscribeToAllScales();
+                subscribeToScaleSummary();
+                subscribeToAllScalesData();
+                subscribeToAlerts();
+            }, function(error) {
+                console.error('Connection error:', error);
+                updateConnectionStatus(false);
+                alert('Failed to connect: ' + error);
+            });
+        }
+
+        function disconnect() {
+            if (stompClient !== null) {
+                if (specificScaleSubscription) {
+                    specificScaleSubscription.unsubscribe();
+                }
+                stompClient.disconnect();
+                updateConnectionStatus(false);
+                console.log('Disconnected');
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+
+            if (connected) {
+                indicator.classList.add('connected');
+                statusText.textContent = 'Connected';
+                statusText.style.color = '#27ae60';
+                statusText.style.fontWeight = '600';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                indicator.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+                statusText.style.color = '#e74c3c';
+                statusText.style.fontWeight = '600';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        function subscribeToAllScales() {
+            stompClient.subscribe('/topic/scales', function(message) {
+                const data = JSON.parse(message.body);
+                counters.scales++;
+                document.getElementById('scalesCount').textContent = counters.scales;
+                
+                const html = `
+                    <div class="event-item">
+                        <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                        <div class="scale-info">Scale ${data.scaleId} - ${data.status}</div>
+                        <div class="data-fields">
+                            ${createDataField(data.data1)}
+                            ${createDataField(data.data2)}
+                            ${createDataField(data.data3)}
+                            ${createDataField(data.data4)}
+                            ${createDataField(data.data5)}
+                        </div>
+                    </div>
+                `;
+                
+                prependToContainer('scalesEvents', html);
+            });
+        }
+
+        function subscribeToSpecificScale() {
+            const scaleId = document.getElementById('scaleIdInput').value;
+            if (!scaleId) {
+                alert('Please enter a scale ID');
+                return;
+            }
+
+            if (specificScaleSubscription) {
+                specificScaleSubscription.unsubscribe();
+            }
+
+            currentScaleId = scaleId;
+            specificScaleSubscription = stompClient.subscribe('/topic/scale/' + scaleId, function(message) {
+                const data = JSON.parse(message.body);
+                counters.scaleSpecific++;
+                document.getElementById('scaleSpecificCount').textContent = counters.scaleSpecific;
+                
+                const html = `
+                    <div class="event-item">
+                        <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                        <div class="scale-info">Scale ${data.scaleId} - ${data.status}</div>
+                        <div class="data-fields">
+                            ${createDataField(data.data1)}
+                            ${createDataField(data.data2)}
+                            ${createDataField(data.data3)}
+                            ${createDataField(data.data4)}
+                            ${createDataField(data.data5)}
+                        </div>
+                    </div>
+                `;
+                
+                prependToContainer('scaleSpecificEvents', html);
+            });
+
+            console.log('Subscribed to scale ' + scaleId);
+        }
+
+        function unsubscribeFromSpecificScale() {
+            if (specificScaleSubscription) {
+                specificScaleSubscription.unsubscribe();
+                specificScaleSubscription = null;
+                currentScaleId = null;
+                console.log('Unsubscribed from specific scale');
+            }
+        }
+
+        function subscribeToScaleSummary() {
+            stompClient.subscribe('/topic/scale-summary', function(message) {
+                const data = JSON.parse(message.body);
+                counters.summary++;
+                document.getElementById('summaryCount').textContent = counters.summary;
+                
+                document.getElementById('totalScales').textContent = data.totalScales || 0;
+                document.getElementById('activeScales').textContent = data.activeScales || 0;
+                document.getElementById('onlineScales').textContent = data.onlineScales || 0;
+                document.getElementById('offlineScales').textContent = data.offlineScales || 0;
+            });
+        }
+
+        function subscribeToAllScalesData() {
+            stompClient.subscribe('/topic/all-scales-data', function(message) {
+                const data = JSON.parse(message.body);
+                counters.snapshot++;
+                document.getElementById('snapshotCount').textContent = counters.snapshot;
+                
+                const html = `
+                    <div class="event-item">
+                        <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                        <div class="scale-info">${data.scales.length} scales in snapshot</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+                
+                prependToContainer('snapshotEvents', html);
+            });
+        }
+
+        function subscribeToAlerts() {
+            stompClient.subscribe('/topic/scale-alerts', function(message) {
+                const data = JSON.parse(message.body);
+                counters.alerts++;
+                document.getElementById('alertsCount').textContent = counters.alerts;
+                
+                const alertClass = data.isRecoveryBatch ? 'alert-recovery' : 'alert-critical';
+                const summary = data.summary;
+                
+                let alertsHtml = '';
+                data.alerts.forEach(alert => {
+                    const itemClass = alert.alertType === 'CRITICAL' ? 'alert-critical' : 
+                                     alert.alertType === 'WARNING' ? 'alert-warning' : 
+                                     alert.alertType === 'RECOVERY' ? 'alert-recovery' : '';
+                    
+                    alertsHtml += `
+                        <div class="event-item ${itemClass}">
+                            <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                            <div class="scale-info">${alert.scale.name} - ${alert.alertType}</div>
+                            <div><strong>${alert.issueType}</strong>: ${alert.message}</div>
+                            <div style="font-size: 11px; color: #7f8c8d; margin-top: 5px;">
+                                Duration: ${alert.durationSeconds}s | Failures: ${alert.consecutiveFailures}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                const html = `
+                    <div class="event-item ${alertClass}">
+                        <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                        <div class="scale-info">Batch: ${data.totalIssues} issues</div>
+                        <div class="alert-summary">
+                            <div class="alert-stat">
+                                <div class="count">${summary.criticalCount}</div>
+                                <div class="label">Critical</div>
+                            </div>
+                            <div class="alert-stat">
+                                <div class="count">${summary.warningCount}</div>
+                                <div class="label">Warning</div>
+                            </div>
+                            <div class="alert-stat">
+                                <div class="count">${summary.infoCount}</div>
+                                <div class="label">Info</div>
+                            </div>
+                            <div class="alert-stat">
+                                <div class="count">${summary.recoveryCount}</div>
+                                <div class="label">Recovery</div>
+                            </div>
+                        </div>
+                        ${alertsHtml}
+                    </div>
+                `;
+                
+                prependToContainer('alertsEvents', html);
+            });
+        }
+
+        function createDataField(dataField) {
+            if (!dataField || !dataField.isUsed) return '';
+            
+            return `
+                <div class="data-field">
+                    <div class="label">${dataField.name}</div>
+                    <div class="value">${dataField.value || 'null'}</div>
+                </div>
+            `;
+        }
+
+        function prependToContainer(containerId, html) {
+            const container = document.getElementById(containerId);
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            
+            // Keep only last 20 items
+            while (container.children.length >= 20) {
+                container.removeChild(container.lastChild);
+            }
+            
+            container.insertBefore(temp.firstElementChild, container.firstChild);
+        }
+
+        function clearEvents(containerId) {
+            document.getElementById(containerId).innerHTML = '';
+            
+            // Reset counter
+            const counterMap = {
+                'scalesEvents': 'scales',
+                'scaleSpecificEvents': 'scaleSpecific',
+                'snapshotEvents': 'snapshot',
+                'alertsEvents': 'alerts'
+            };
+            
+            if (counterMap[containerId]) {
+                counters[counterMap[containerId]] = 0;
+                const counterId = containerId.replace('Events', 'Count');
+                document.getElementById(counterId).textContent = '0';
+            }
+        }
+    </script>
+</body>
+</html>

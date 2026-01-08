@@ -106,15 +106,19 @@ public class ScaleMonitoringService {
         // Số cân active
         long activeScales = scaleRepository.countByIsActive(true);
         
-        // Số cân đang online (có engine đang chạy)
+        // Số cân đang online (có engine đang chạy VÀ đọc được dữ liệu)
         int onlineScales = 0;
         for (Long scaleId : engineManager.getRunningEngines().keySet()) {
             if (engineManager.isEngineRunning(scaleId)) {
-                onlineScales++;
+                // Check thêm: phải có current state và status = online
+                ScaleCurrentState currentState = currentStateRepository.findById(scaleId).orElse(null);
+                if (currentState != null && "online".equalsIgnoreCase(currentState.getStatus())) {
+                    onlineScales++;
+                }
             }
         }
         
-        // Số cân offline = active nhưng không có engine
+        // Số cân offline = active nhưng không online
         int offlineScales = (int) (activeScales - onlineScales);
         
         return ScaleSummaryEvent.builder()

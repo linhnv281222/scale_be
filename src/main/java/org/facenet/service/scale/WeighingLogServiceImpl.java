@@ -2,6 +2,9 @@ package org.facenet.service.scale;
 
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.ValidationException;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.scale.WeighingDataDto;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
@@ -122,6 +125,147 @@ public class WeighingLogServiceImpl implements WeighingLogService {
                 .value(rawValue)
                 .name(name)
                 .isUsed(isUsed)
+                .build();
+    }
+    
+    @Override
+    public PageResponseDto<WeighingDataDto.HistoryResponse> getWeighingHistory(
+            PageRequestDto pageRequest, 
+            Map<String, String> filters) {
+        
+        // Build pageable with default sort by createdAt DESC if not specified
+        Pageable pageable;
+        if (pageRequest.getSort() == null || pageRequest.getSort().isBlank()) {
+            pageable = PageRequest.of(
+                pageRequest.getPage(), 
+                pageRequest.getSize(), 
+                Sort.by(Sort.Direction.DESC, "createdAt")
+            );
+        } else {
+            pageable = pageRequest.toPageRequest();
+        }
+        
+        // Build filter specification
+        Specification<WeighingLog> filterSpec = buildFilterSpecification(filters);
+        
+        // Build search specification if provided
+        Specification<WeighingLog> searchSpec = Specification.where(null);
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            searchSpec = buildSearchSpecification(pageRequest.getSearch());
+        }
+        
+        // Combine specifications
+        Specification<WeighingLog> finalSpec = Specification.where(filterSpec).and(searchSpec);
+        
+        // Execute query
+        Page<WeighingLog> logPage = weighingLogRepository.findAll(finalSpec, pageable);
+        
+        // Convert to HistoryResponse
+        Page<WeighingDataDto.HistoryResponse> responsePage = logPage.map(this::toHistoryResponse);
+        
+        return PageResponseDto.from(responsePage);
+    }
+    
+    private Specification<WeighingLog> buildFilterSpecification(Map<String, String> filters) {
+        return (root, query, criteriaBuilder) -> {
+            var predicates = criteriaBuilder.conjunction();
+            
+            if (filters == null || filters.isEmpty()) {
+                return predicates;
+            }
+            
+            // Filter by scaleId
+            if (filters.containsKey("scaleId") && filters.get("scaleId") != null) {
+                predicates = criteriaBuilder.and(predicates, 
+                    criteriaBuilder.equal(root.get("scaleId"), Long.parseLong(filters.get("scaleId"))));
+            }
+            
+            // Filter by scale code (join to scale)
+            if (filters.containsKey("scaleCode") && filters.get("scaleCode") != null) {
+                var scaleJoin = root.join("scale");
+                predicates = criteriaBuilder.and(predicates,
+                    criteriaBuilder.like(
+                        criteriaBuilder.lower(scaleJoin.get("name")),
+                        "%" + filters.get("scaleCode").toLowerCase() + "%"
+                    ));
+            }
+            
+            // Filter by direction (join to scale)
+            if (filters.containsKey("direction") && filters.get("direction") != null) {
+                var scaleJoin = root.join("scale");
+                predicates = criteriaBuilder.and(predicates,
+                    criteriaBuilder.equal(scaleJoin.get("direction"), 
+                        org.facenet.entity.scale.ScaleDirection.valueOf(filters.get("direction").toUpperCase())));
+            }
+            
+            // Filter by locationId (join to scale -> location)
+            if (filters.containsKey("locationId") && filters.get("locationId") != null) {
+                var scaleJoin = root.join("scale");
+                var locationJoin = scaleJoin.join("location");
+                predicates = criteriaBuilder.and(predicates,
+                    criteriaBuilder.equal(locationJoin.get("id"), Long.parseLong(filters.get("locationId"))));
+            }
+            
+            // Filter by protocolId (join to scale -> protocol)
+            if (filters.containsKey("protocolId") && filters.get("protocolId") != null) {
+                var scaleJoin = root.join("scale");
+                var protocolJoin = scaleJoin.join("protocol");
+                predicates = criteriaBuilder.and(predicates,
+                    criteriaBuilder.equal(protocolJoin.get("id"), Long.parseLong(filters.get("protocolId"))));
+            }
+            
+            // Filter by startTime
+            if (filters.containsKey("startTime") && filters.get("startTime") != null) {
+                OffsetDateTime startTime = OffsetDateTime.parse(filters.get("startTime"));
+                predicates = criteriaBuilder.and(predicates,
+                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), startTime));
+            }
+            
+            // Filter by endTime
+            if (filters.containsKey("endTime") && filters.get("endTime") != null) {
+                OffsetDateTime endTime = OffsetDateTime.parse(filters.get("endTime"));
+                predicates = criteriaBuilder.and(predicates,
+                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), endTime));
+            }
+            
+            return predicates;
+        };
+    }
+    
+    private Specification<WeighingLog> buildSearchSpecification(String search) {
+        return (root, query, criteriaBuilder) -> {
+            var scaleJoin = root.join("scale");
+            String searchPattern = "%" + search.toLowerCase() + "%";
+            
+            return criteriaBuilder.or(
+                criteriaBuilder.like(criteriaBuilder.lower(scaleJoin.get("name")), searchPattern),
+                criteriaBuilder.like(criteriaBuilder.lower(scaleJoin.get("model")), searchPattern)
+            );
+        };
+    }
+    
+    private WeighingDataDto.HistoryResponse toHistoryResponse(WeighingLog log) {
+        Scale scale = log.getScale();
+        ScaleConfig config = scale != null ? scale.getConfig() : null;
+        
+        return WeighingDataDto.HistoryResponse.builder()
+                .scaleId(log.getScaleId())
+                .scaleCode(scale != null ? scale.getName() : null)
+                .scaleName(scale != null ? scale.getName() : null)
+                .scaleDirection(scale != null && scale.getDirection() != null 
+                    ? scale.getDirection().name() : null)
+                .locationName(scale != null && scale.getLocation() != null 
+                    ? scale.getLocation().getName() : null)
+                .protocolName(scale != null && scale.getProtocol() != null 
+                    ? scale.getProtocol().getName() : null)
+                .createdAt(log.getCreatedAt())
+                .lastTime(log.getLastTime())
+                .data1(log.getData1())
+                .data2(log.getData2())
+                .data3(log.getData3())
+                .data4(log.getData4())
+                .data5(log.getData5())
+                .dataValues(buildDataValues(log, config))
                 .build();
     }
 }
