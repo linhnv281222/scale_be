@@ -8,16 +8,18 @@ import org.facenet.common.exception.ResourceNotFoundException;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.specification.GenericSpecification;
-import org.facenet.dto.scale.ScaleConfigDto;
 import org.facenet.dto.scale.ScaleDto;
 import org.facenet.entity.location.Location;
 import org.facenet.entity.manufacturer.ScaleManufacturer;
+import org.facenet.entity.protocol.Protocol;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
+import org.facenet.entity.scale.ScaleDirection;
 import org.facenet.event.ConfigChangedEvent;
 import org.facenet.mapper.ScaleMapper;
 import org.facenet.repository.location.LocationRepository;
 import org.facenet.repository.manufacturer.ScaleManufacturerRepository;
+import org.facenet.repository.protocol.ProtocolRepository;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -27,13 +29,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Service implementation for Scale operations
@@ -47,6 +48,7 @@ public class ScaleServiceImpl implements ScaleService {
     private final ScaleConfigRepository scaleConfigRepository;
     private final LocationRepository locationRepository;
     private final ScaleManufacturerRepository manufacturerRepository;
+    private final ProtocolRepository protocolRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
@@ -71,60 +73,8 @@ public class ScaleServiceImpl implements ScaleService {
     }
 
     @Override
-    @Cacheable(value = "scales")
-    public List<ScaleDto.Response> getAllScales() {
-        List<Scale> scales = scaleRepository.findAll();
-        return scales.stream()
-                .map(ScaleMapper::toResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Cacheable(value = "scalesByLocation", key = "#locationId")
-    public List<ScaleDto.Response> getScalesByLocation(Long locationId) {
-        List<Scale> scales = scaleRepository.findByLocationId(locationId);
-        return scales.stream()
-                .map(ScaleMapper::toResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<ScaleDto.Response> getScalesByLocations(List<Long> locationIds) {
-        List<Scale> scales = scaleRepository.findByLocationIdIn(locationIds);
-        return scales.stream()
-                .map(ScaleMapper::toResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<ScaleDto.Response> getScalesByManufacturer(Long manufacturerId) {
-        List<Scale> scales = scaleRepository.findByManufacturerId(manufacturerId);
-        return scales.stream()
-                .map(ScaleMapper::toResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<ScaleDto.Response> getScalesByDirection(String direction) {
-        org.facenet.entity.scale.ScaleDirection scaleDirection = 
-            org.facenet.entity.scale.ScaleDirection.valueOf(direction);
-        List<Scale> scales = scaleRepository.findByDirection(scaleDirection);
-        return scales.stream()
-                .map(ScaleMapper::toResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<ScaleDto.Response> getActiveScales() {
-        List<Scale> scales = scaleRepository.findByIsActive(true);
-        return scales.stream()
-                .map(ScaleMapper::toResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
     @Cacheable(value = "scales", key = "#id")
-    public ScaleDto.Response getScaleById(Long id) {
+    public ScaleDto.Response getScaleById(@Param("id") Long id) {
         Scale scale = scaleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", id));
         return ScaleMapper.toResponseDto(scale);
@@ -132,6 +82,7 @@ public class ScaleServiceImpl implements ScaleService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "scales", allEntries = true)
     public ScaleDto.Response createScale(ScaleDto.Request request) {
         // Validate location exists
         Location location = locationRepository.findById(request.getLocationId())
@@ -144,19 +95,27 @@ public class ScaleServiceImpl implements ScaleService {
                     .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", request.getManufacturerId()));
         }
 
+        // Validate protocol exists if provided
+        Protocol protocol = null;
+        if (request.getProtocolId() != null) {
+            protocol = protocolRepository.findById(request.getProtocolId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Protocol", "id", request.getProtocolId()));
+        }
+
         Scale scale = Scale.builder()
                 .name(request.getName())
                 .location(location)
                 .manufacturer(manufacturer)
+                .protocol(protocol)
                 .model(request.getModel())
-                .direction(request.getDirection() != null ? org.facenet.entity.scale.ScaleDirection.valueOf(request.getDirection()) : null)
+                .direction(request.getDirection() != null ? ScaleDirection.valueOf(request.getDirection()) : null)
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .build();
 
         scale = scaleRepository.save(scale);
 
-        // Create default config
-        createDefaultConfig(scale);
+        // Create config with data from request
+        createScaleConfig(scale, request);
 
         // Publish event for cache invalidation
         eventPublisher.publishEvent(new ConfigChangedEvent(this, scale.getId(), "SCALE_CREATE"));
@@ -168,10 +127,9 @@ public class ScaleServiceImpl implements ScaleService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "scales", key = "#id"),
-        @CacheEvict(value = "scales", allEntries = true),
-        @CacheEvict(value = "scalesByLocation", allEntries = true)
+        @CacheEvict(value = "scales", allEntries = true)
     })
-    public ScaleDto.Response updateScale(Long id, ScaleDto.Request request) {
+    public ScaleDto.Response updateScale(@Param("id") Long id, ScaleDto.Request request) {
         Scale scale = scaleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", id));
 
@@ -186,14 +144,25 @@ public class ScaleServiceImpl implements ScaleService {
                     .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", request.getManufacturerId()));
         }
 
+        // Validate protocol exists if provided
+        Protocol protocol = null;
+        if (request.getProtocolId() != null) {
+            protocol = protocolRepository.findById(request.getProtocolId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Protocol", "id", request.getProtocolId()));
+        }
+
         scale.setName(request.getName());
         scale.setLocation(location);
         scale.setManufacturer(manufacturer);
+        scale.setProtocol(protocol);
         scale.setModel(request.getModel());
-        scale.setDirection(request.getDirection() != null ? org.facenet.entity.scale.ScaleDirection.valueOf(request.getDirection()) : null);
+        scale.setDirection(request.getDirection() != null ? ScaleDirection.valueOf(request.getDirection()) : null);
         scale.setIsActive(request.getIsActive());
 
         scale = scaleRepository.save(scale);
+        
+        // Update config with data from request
+        updateScaleConfig(scale, request);
         
         // Publish event
         eventPublisher.publishEvent(new ConfigChangedEvent(this, scale.getId(), "SCALE_UPDATE"));
@@ -205,11 +174,9 @@ public class ScaleServiceImpl implements ScaleService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "scales", key = "#id"),
-        @CacheEvict(value = "scales", allEntries = true),
-        @CacheEvict(value = "scalesByLocation", allEntries = true),
-        @CacheEvict(value = "scaleConfig", key = "#id")
+        @CacheEvict(value = "scales", allEntries = true)
     })
-    public void deleteScale(Long id) {
+    public void deleteScale(@Param("id") Long id) {
         Scale scale = scaleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", id));
 
@@ -220,18 +187,38 @@ public class ScaleServiceImpl implements ScaleService {
         eventPublisher.publishEvent(new ConfigChangedEvent(this, id, "SCALE_DELETE"));
     }
 
-    @Override
-    @Cacheable(value = "scaleConfig", key = "#scaleId")
-    public ScaleConfigDto.Response getScaleConfig(Long scaleId) {
-        ScaleConfig config = scaleConfigRepository.findById(scaleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Scale config", "scaleId", scaleId));
-        return ScaleMapper.toConfigDto(config);
+    private void createScaleConfig(Scale scale, ScaleDto.Request request) {
+        try {
+            // Use values from request or defaults
+            String protocol = request.getProtocol() != null ? request.getProtocol() : "MODBUS_TCP";
+            Integer pollInterval = request.getPollInterval() != null ? request.getPollInterval() : 1000;
+            
+            Map<String, Object> connParams = request.getConnParams() != null ? request.getConnParams() : createDefaultConnParams();
+            Map<String, Object> data1 = request.getData1() != null ? request.getData1() : createDefaultData1();
+            Map<String, Object> data2 = request.getData2() != null ? request.getData2() : Map.of("is_used", false);
+            Map<String, Object> data3 = request.getData3() != null ? request.getData3() : Map.of("is_used", false);
+            Map<String, Object> data4 = request.getData4() != null ? request.getData4() : Map.of("is_used", false);
+            Map<String, Object> data5 = request.getData5() != null ? request.getData5() : Map.of("is_used", false);
+
+            ScaleConfig config = ScaleConfig.builder()
+                    .scale(scale)
+                    .protocol(protocol)
+                    .pollInterval(pollInterval)
+                    .connParams(connParams)
+                    .data1(data1)
+                    .data2(data2)
+                    .data3(data3)
+                    .data4(data4)
+                    .data5(data5)
+                    .build();
+
+            scaleConfigRepository.save(config);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create scale config", e);
+        }
     }
 
-    @Override
-    @Transactional
-    @CacheEvict(value = "scaleConfig", key = "#scaleId")
-    public ScaleConfigDto.Response updateScaleConfig(Long scaleId, ScaleConfigDto.Request request) {
+    private void updateScaleConfig(Scale scale, ScaleDto.Request request) {
         try {
             // Convert Maps to JSON strings for native query
             String connParamsJson = request.getConnParams() != null ? 
@@ -249,7 +236,7 @@ public class ScaleServiceImpl implements ScaleService {
 
             // Use native query to update - bypasses @MapsId issues
             int updatedRows = scaleConfigRepository.updateScaleConfig(
-                scaleId,
+                scale.getId(),
                 request.getProtocol(),
                 request.getPollInterval() != null ? request.getPollInterval() : 1000,
                 connParamsJson,
@@ -262,49 +249,30 @@ public class ScaleServiceImpl implements ScaleService {
             );
 
             if (updatedRows == 0) {
-                throw new ResourceNotFoundException("Scale config", "scaleId", scaleId);
+                throw new ResourceNotFoundException("Scale config", "scaleId", scale.getId());
             }
 
             // Clear entity manager cache to ensure fresh data
             entityManager.clear();
-
-            // Fetch updated config
-            ScaleConfig updatedConfig = scaleConfigRepository.findById(scaleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Scale config", "scaleId", scaleId));
-
-            // Publish event for hot-reload and cache invalidation
-            eventPublisher.publishEvent(new ConfigChangedEvent(this, scaleId, "CONFIG_UPDATE"));
-
-            return ScaleMapper.toConfigDto(updatedConfig);
 
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize config data", e);
         }
     }
 
-    private void createDefaultConfig(Scale scale) {
-        Map<String, Object> defaultConnParams = new HashMap<>();
-        defaultConnParams.put("ip", "192.168.1.10");
-        defaultConnParams.put("port", 502);
+    private Map<String, Object> createDefaultConnParams() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("ip", "192.168.1.10");
+        params.put("port", 502);
+        return params;
+    }
 
-        Map<String, Object> defaultData1 = new HashMap<>();
-        defaultData1.put("name", "Weight");
-        defaultData1.put("start_registers", 40001);
-        defaultData1.put("num_registers", 2);
-        defaultData1.put("is_used", true);
-
-        ScaleConfig config = ScaleConfig.builder()
-                .scale(scale)
-                .protocol("MODBUS_TCP")
-                .pollInterval(1000)
-                .connParams(defaultConnParams)
-                .data1(defaultData1)
-                .data2(Map.of("is_used", false))
-                .data3(Map.of("is_used", false))
-                .data4(Map.of("is_used", false))
-                .data5(Map.of("is_used", false))
-                .build();
-
-        scaleConfigRepository.save(config);
+    private Map<String, Object> createDefaultData1() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "Weight");
+        data.put("start_registers", 40001);
+        data.put("num_registers", 2);
+        data.put("is_used", true);
+        return data;
     }
 }
