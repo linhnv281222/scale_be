@@ -17,6 +17,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,7 +59,7 @@ public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
 
     @Override
     @Cacheable(value = "manufacturers", key = "#id")
-    public ScaleManufacturerDto.Response getManufacturerById(Long id) {
+    public ScaleManufacturerDto.Response getManufacturerById(@Param("id") Long id) {
         log.debug("Getting manufacturer by id: {}", id);
         ScaleManufacturer manufacturer = manufacturerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", id));

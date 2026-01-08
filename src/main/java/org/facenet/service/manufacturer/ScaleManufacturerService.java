@@ -3,6 +3,7 @@ package org.facenet.service.manufacturer;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.manufacturer.ScaleManufacturerDto;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Map;
 
@@ -24,7 +25,7 @@ public interface ScaleManufacturerService {
     /**
      * Get manufacturer by ID
      */
-    ScaleManufacturerDto.Response getManufacturerById(Long id);
+    ScaleManufacturerDto.Response getManufacturerById(@Param("id") Long id);
 
     /**
      * Create a new manufacturer

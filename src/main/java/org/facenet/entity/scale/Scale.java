@@ -5,13 +5,16 @@ import lombok.*;
 import org.facenet.common.audit.Auditable;
 import org.facenet.entity.location.Location;
 import org.facenet.entity.manufacturer.ScaleManufacturer;
+import org.facenet.entity.protocol.Protocol;
 
 /**
  * Entity for scales table
  */
 @Entity
 @Table(name = "scales", indexes = {
-    @Index(name = "idx_scales_location", columnList = "location_id")
+    @Index(name = "idx_scales_location", columnList = "location_id"),
+    @Index(name = "idx_scales_manufacturer", columnList = "manufacturer_id"),
+    @Index(name = "idx_scales_protocol", columnList = "protocol_id")
 })
 @Getter
 @Setter
@@ -34,6 +37,10 @@ public class Scale extends Auditable {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manufacturer_id")
     private ScaleManufacturer manufacturer;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "protocol_id")
+    private Protocol protocol;
 
     @Column(name = "model", length = 50)
     private String model;

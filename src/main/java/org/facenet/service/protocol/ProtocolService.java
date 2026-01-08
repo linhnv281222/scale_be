@@ -3,6 +3,7 @@ package org.facenet.service.protocol;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.protocol.ProtocolDto;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Map;
 
@@ -24,7 +25,7 @@ public interface ProtocolService {
     /**
      * Get protocol by ID
      */
-    ProtocolDto.Response getProtocolById(Long id);
+    ProtocolDto.Response getProtocolById(@Param("id") Long id);
 
     /**
      * Create a new protocol

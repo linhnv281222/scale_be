@@ -17,6 +17,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +60,7 @@ public class ProtocolServiceImpl implements ProtocolService {
 
     @Override
     @Cacheable(value = "protocols", key = "#id")
-    public ProtocolDto.Response getProtocolById(Long id) {
+    public ProtocolDto.Response getProtocolById(@Param("id") Long id) {
         log.debug("Getting protocol by id: {}", id);
         Protocol protocol = protocolRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Protocol", "id", id));

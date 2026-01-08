@@ -1,84 +1,75 @@
 package org.facenet.controller.scale;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
-import org.facenet.common.response.ApiResponse;
-import org.facenet.common.response.ErrorResponse;
-import org.facenet.dto.scale.ScaleConfigDto;
 import org.facenet.dto.scale.ScaleDto;
-import org.facenet.dto.scale.WeighingDataDto;
-import org.facenet.service.scale.WeighingLogService;
 import org.facenet.service.scale.ScaleService;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.format.annotation.DateTimeFormat;
 
-import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Map;
 
+/**
+ * REST Controller for Scale Management
+ */
 @RestController
 @RequestMapping("/scales")
 @RequiredArgsConstructor
+@Tag(name = "Scale Management", description = "APIs for managing scales with integrated configuration")
 public class ScaleController {
 
     private final ScaleService scaleService;
-    private final WeighingLogService weighingLogService;
 
     /**
      * Get all scales with pagination and filters
-     * Supports filters: locationId, manufacturerId, direction, isActive, model, name
-     * Examples:
-     * - /scales?page=0&size=10
-     * - /scales?locationId=1&isActive=true
-     * - /scales?manufacturerId=2&direction=IMPORT
-     * - /scales?search=warehouse&sort=name,asc
+     * Supports search on name, model
+     * Supports filters: locationId, manufacturerId, protocolId, direction, isActive, model
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get all scales", description = "Retrieve all scales with pagination and filters. Supports: locationId, manufacturerId, direction (IMPORT/EXPORT), isActive, model, name")
-    public ResponseEntity<ApiResponse<PageResponseDto<ScaleDto.Response>>> getAllScales(
+    @Operation(
+        summary = "Get all scales",
+        description = "Retrieve paginated list of scales with optional search and filters. " +
+                     "Search: name, model. Filters: locationId, manufacturerId, protocolId, direction, isActive, model"
+    )
+    public ResponseEntity<PageResponseDto<ScaleDto.Response>> getAllScales(
             @RequestParam(value = "page", defaultValue = "0") Integer page,
             @RequestParam(value = "size", defaultValue = "10") Integer size,
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "locationId", required = false) Long locationId,
             @RequestParam(value = "manufacturerId", required = false) Long manufacturerId,
+            @RequestParam(value = "protocolId", required = false) Long protocolId,
+            @RequestParam(value = "model", required = false) String model,
             @RequestParam(value = "direction", required = false) String direction,
-            @RequestParam(value = "isActive", required = false) Boolean isActive,
-            @RequestParam(required = false) Map<String, String> allParams) {
+            @RequestParam(value = "isActive", required = false) Boolean isActive) {
         
-        // Build filters map from specific and generic params
-        Map<String, String> filters = new java.util.HashMap<>(allParams);
-        
-        // Remove pagination params
-        filters.remove("page");
-        filters.remove("size");
-        filters.remove("sort");
-        filters.remove("search");
-        
-        // Add specific filters if provided (overwrites any from allParams)
+        Map<String, String> filters = new java.util.HashMap<>();
         if (locationId != null) {
-            filters.put("location.id", locationId.toString());
+            filters.put("location.id", String.valueOf(locationId));
         }
         if (manufacturerId != null) {
-            filters.put("manufacturer.id", manufacturerId.toString());
+            filters.put("manufacturer.id", String.valueOf(manufacturerId));
+        }
+        if (protocolId != null) {
+            filters.put("protocol.id", String.valueOf(protocolId));
+        }
+        if (model != null) {
+            filters.put("model", model);
         }
         if (direction != null) {
             filters.put("direction", direction);
         }
         if (isActive != null) {
-            filters.put("isActive", isActive.toString());
+            filters.put("isActive", String.valueOf(isActive));
         }
         
         PageRequestDto pageRequest = PageRequestDto.builder()
@@ -88,142 +79,75 @@ public class ScaleController {
             .search(search)
             .build();
         
-        PageResponseDto<ScaleDto.Response> scales = scaleService.getAllScales(pageRequest, filters);
-        return ResponseEntity.ok(ApiResponse.success(scales));
+        PageResponseDto<ScaleDto.Response> response = scaleService.getAllScales(pageRequest, filters);
+        return ResponseEntity.ok(response);
     }
 
     /**
-     * Get all scales without pagination (for dropdown/select)
-     * Supports same filters as main endpoint
+     * Get scale by ID
      */
-    @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    @Operation(summary = "Get all scales", description = "Retrieve all scales without pagination. Supports filters: locationId, manufacturerId, direction, isActive")
-    public ResponseEntity<ApiResponse<List<ScaleDto.Response>>> getAllScalesList(
-            @RequestParam(value = "locationId", required = false) Long locationId,
-            @RequestParam(value = "manufacturerId", required = false) Long manufacturerId,
-            @RequestParam(value = "direction", required = false) String direction,
-            @RequestParam(value = "isActive", required = false) Boolean isActive) {
-        
-        // If no filters, return all
-        if (locationId == null && manufacturerId == null && direction == null && isActive == null) {
-            return ResponseEntity.ok(ApiResponse.success(scaleService.getAllScales()));
-        }
-        
-        // Build filters and use paginated endpoint without limit
-        Map<String, String> filters = new java.util.HashMap<>();
-        if (locationId != null) {
-            filters.put("location.id", locationId.toString());
-        }
-        if (manufacturerId != null) {
-            filters.put("manufacturer.id", manufacturerId.toString());
-        }
-        if (direction != null) {
-            filters.put("direction", direction);
-        }
-        if (isActive != null) {
-            filters.put("isActive", isActive.toString());
-        }
-        
-        // Get with high page size to simulate "all"
-        PageRequestDto pageRequest = PageRequestDto.builder()
-            .page(0)
-            .size(10000)
-            .build();
-        
-        PageResponseDto<ScaleDto.Response> result = scaleService.getAllScales(pageRequest, filters);
-        return ResponseEntity.ok(ApiResponse.success(result.getContent()));
-    }
-
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    public ResponseEntity<ApiResponse<ScaleDto.Response>> getScaleById(
-            @PathVariable("id") Long id) {
-        ScaleDto.Response scale = scaleService.getScaleById(id);
-        return ResponseEntity.ok(ApiResponse.success(scale));
-    }
-
-    @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<ApiResponse<ScaleDto.Response>> createScale(
-            @Valid @RequestBody ScaleDto.Request request) {
-        ScaleDto.Response scale = scaleService.createScale(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(scale));
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<ApiResponse<ScaleDto.Response>> updateScale(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody ScaleDto.Request request) {
-        ScaleDto.Response scale = scaleService.updateScale(id, request);
-        return ResponseEntity.ok(ApiResponse.success(scale));
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<Void> deleteScale(
-            @PathVariable("id") Long id) {
-        scaleService.deleteScale(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/{id}/config")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    public ResponseEntity<ApiResponse<ScaleConfigDto.Response>> getScaleConfig(
-            @PathVariable("id") Long id) {
-        ScaleConfigDto.Response config = scaleService.getScaleConfig(id);
-        return ResponseEntity.ok(ApiResponse.success(config));
-    }
-
-    @PutMapping("/{id}/config")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    @Operation(summary = "Update scale configuration", 
-               description = "Update the configuration for a specific scale including protocol, polling interval, and data mappings")
-    @ApiResponses(value = {
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Configuration updated successfully",
-                           content = @Content(mediaType = "application/json", 
-                                            schema = @Schema(implementation = ScaleConfigDto.Response.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Scale not found"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied")
-    })
-    public ResponseEntity<ApiResponse<ScaleConfigDto.Response>> updateScaleConfig(
-            @Parameter(description = "Scale ID", required = true, example = "1")
-            @PathVariable("id") Long id,
-            @Parameter(description = "Scale configuration data", required = true)
-            @Valid @RequestBody ScaleConfigDto.Request request) {
-        ScaleConfigDto.Response config = scaleService.updateScaleConfig(id, request);
-        return ResponseEntity.ok(ApiResponse.success(config));
+    @Operation(
+        summary = "Get scale by ID",
+        description = "Retrieve a specific scale with its configuration by ID"
+    )
+    public ResponseEntity<ScaleDto.Response> getScaleById(@PathVariable Long id) {
+        ScaleDto.Response response = scaleService.getScaleById(id);
+        return ResponseEntity.ok(response);
     }
 
     /**
-     * Get weighing log history with pagination and optional filters.
-     * Query params:
-     * - scaleId: filter by scale
-     * - startTime, endTime: filter by time range (ISO-8601)
-     * - page, size: pagination
+     * Create a new scale with configuration
      */
-    @GetMapping("/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    public ResponseEntity<ApiResponse<Page<WeighingDataDto.LogResponse>>> getScaleHistory(
-            @RequestParam(name = "scaleId", required = false) Long scaleId,
-            @RequestParam(name = "startTime", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
-            @RequestParam(name = "endTime", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
-    ) {
-        WeighingDataDto.LogQueryRequest request = WeighingDataDto.LogQueryRequest.builder()
-                .scaleId(scaleId)
-                .startTime(startTime)
-                .endTime(endTime)
-                .page(page)
-                .size(size)
-                .build();
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @Operation(
+        summary = "Create new scale",
+        description = "Create a new scale with integrated configuration. All configuration fields can be provided in the request."
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+        description = "Scale creation request with configuration",
+        required = true,
+        content = @Content(schema = @Schema(implementation = ScaleDto.Request.class))
+    )
+    public ResponseEntity<ScaleDto.Response> createScale(@Valid @RequestBody ScaleDto.Request request) {
+        ScaleDto.Response response = scaleService.createScale(request);
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
 
-        Page<WeighingDataDto.LogResponse> history = weighingLogService.getHistory(request);
-        return ResponseEntity.ok(ApiResponse.success(history));
+    /**
+     * Update scale with configuration
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @Operation(
+        summary = "Update scale",
+        description = "Update an existing scale with integrated configuration. All fields including configuration can be updated."
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+        description = "Scale update request with configuration",
+        required = true,
+        content = @Content(schema = @Schema(implementation = ScaleDto.Request.class))
+    )
+    public ResponseEntity<ScaleDto.Response> updateScale(
+            @PathVariable Long id,
+            @Valid @RequestBody ScaleDto.Request request) {
+        ScaleDto.Response response = scaleService.updateScale(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Delete scale
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Delete scale",
+        description = "Delete a scale by ID. Associated configuration will be deleted automatically."
+    )
+    public ResponseEntity<Void> deleteScale(@PathVariable Long id) {
+        scaleService.deleteScale(id);
+        return ResponseEntity.noContent().build();
     }
 }
