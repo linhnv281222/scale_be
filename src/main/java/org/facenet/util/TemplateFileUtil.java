@@ -160,7 +160,8 @@ public class TemplateFileUtil {
         }
         String lower = filename.toLowerCase();
         return lower.endsWith(".docx") || lower.endsWith(".doc") || 
-               lower.endsWith(".xlsx") || lower.endsWith(".pdf");
+               lower.endsWith(".xlsx") || lower.endsWith(".pdf") ||
+               lower.endsWith(".html") || lower.endsWith(".htm");
     }
 
     /**

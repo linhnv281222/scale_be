@@ -5,15 +5,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleCurrentState;
 import org.facenet.entity.scale.WeighingLog;
+import org.facenet.entity.shift.Shift;
 import org.facenet.event.MeasurementEvent;
 import org.facenet.repository.scale.ScaleCurrentStateRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.facenet.repository.scale.WeighingLogRepository;
+import org.facenet.service.shift.ShiftDetectionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
+import java.util.Optional;
 
 /**
  * Implementation of PersistenceService
@@ -28,6 +31,7 @@ public class PersistenceServiceImpl implements PersistenceService {
     private final WeighingLogRepository weighingLogRepository;
     private final ScaleRepository scaleRepository;
     private final DeadLetterService deadLetterService;
+    private final ShiftDetectionService shiftDetectionService;
 
     @Override
     @Transactional
@@ -85,6 +89,19 @@ public class PersistenceServiceImpl implements PersistenceService {
         currentState.setData5(event.getData5() != null ? event.getData5().getValue() : null);
         currentState.setStatus(event.getStatus());
         currentState.setLastTime(lastTime.toOffsetDateTime());
+
+        // Auto-detect and set current shift based on timestamp
+        Optional<Shift> currentShift = shiftDetectionService.detectCurrentShift(lastTime.toOffsetDateTime());
+        currentShift.ifPresentOrElse(
+            shift -> {
+                currentState.setShift(shift);
+                log.debug("[PERSISTENCE] Auto-detected shift {} for scale {}", shift.getCode(), event.getScaleId());
+            },
+            () -> {
+                currentState.setShift(null);
+                log.debug("[PERSISTENCE] No shift detected for scale {} at time {}", event.getScaleId(), lastTime);
+            }
+        );
 
         // Set audit fields for system operation
         currentState.setCreatedBy("engine_modbus");

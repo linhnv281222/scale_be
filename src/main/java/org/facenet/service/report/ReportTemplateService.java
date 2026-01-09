@@ -435,8 +435,10 @@ public class ReportTemplateService {
         // Calculate summary based on template
         ReportData.ReportSummary summary = calculateSummary(rows, template);
 
-        // Build title from template
-        String title = buildTitle(template, startTime, endTime);
+        // Build title from request first, fallback to template
+        String title = request.getReportTitle() != null && !request.getReportTitle().trim().isEmpty()
+                ? request.getReportTitle()
+                : buildTitle(template, startTime, endTime);
 
         // Build metadata
         Map<String, Object> metadata = new HashMap<>();
@@ -464,13 +466,20 @@ public class ReportTemplateService {
         }
         metadata.put("columnNames", activeColumnNames);
 
+        // Use report code from request, fallback to auto-generated
+        String reportCode = request.getReportCode() != null && !request.getReportCode().trim().isEmpty()
+                ? request.getReportCode()
+                : template.getCode() + "-" + System.currentTimeMillis();
+
         return ReportData.builder()
                 .reportTitle(title)
-                .reportCode(template.getCode() + "-" + System.currentTimeMillis())
+                .reportCode(reportCode)
                 .startTime(startTime)
                 .endTime(endTime)
                 .exportTime(OffsetDateTime.now())
-                .preparedBy(preparedBy != null ? preparedBy : "System")
+                .preparedBy(request.getPreparedBy() != null && !request.getPreparedBy().trim().isEmpty() 
+                        ? request.getPreparedBy() 
+                        : "System")
                 .rows(rows)
                 .summary(summary)
                 .metadata(metadata)
@@ -562,7 +571,11 @@ public class ReportTemplateService {
         ReportData.ReportSummary summary = calculateSummary(rows, template);
 
         OrganizationSettings org = getOrganizationSettings();
-        String title = buildTitle(template, startTime, endTime);
+        
+        // Build title from request first, fallback to template
+        String title = request.getReportTitle() != null && !request.getReportTitle().trim().isEmpty()
+                ? request.getReportTitle()
+                : buildTitle(template, startTime, endTime);
 
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("totalLogs", rows.stream().mapToInt(r -> r.getRecordCount() != null ? r.getRecordCount() : 0).sum());
@@ -609,9 +622,14 @@ public class ReportTemplateService {
         data4Name = sanitizeDisplayName(data4Name);
         data5Name = sanitizeDisplayName(data5Name);
 
+        // Use report code from request, fallback to auto-generated
+        String reportCode = request.getReportCode() != null && !request.getReportCode().trim().isEmpty()
+                ? request.getReportCode()
+                : template.getCode() + "-" + System.currentTimeMillis();
+
         return ReportData.builder()
                 .reportTitle(title)
-                .reportCode(template.getCode() + "-" + System.currentTimeMillis())
+                .reportCode(reportCode)
                 .startTime(startTime)
                 .endTime(endTime)
                 .exportTime(OffsetDateTime.now())
@@ -1167,7 +1185,7 @@ public class ReportTemplateService {
         
         // Validate file
         if (!templateFileUtil.isValidTemplateFile(file.getOriginalFilename())) {
-            throw new IllegalArgumentException("Invalid template file type. Supported: .docx, .doc, .xlsx, .pdf");
+            throw new IllegalArgumentException("Invalid template file type. Supported: .docx, .doc, .xlsx, .pdf, .html, .htm");
         }
 
         // Check if template code already exists

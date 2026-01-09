@@ -56,9 +56,14 @@ public class ReportExportService {
     }
 
     /**
-     * Export report using imported template (NEW APPROACH)
+     * Export report using imported template (ENHANCED - supports Word, PDF, Excel)
      * Directly uses template file from template_imports table
      * Fills data from query results into the template
+     * 
+     * Supported formats:
+     * - .docx: Word template with direct table insertion
+     * - .html: PDF template using Thymeleaf
+     * - .xlsx: Excel template (future implementation)
      */
     public byte[] exportReportWithImportedTemplate(ReportExportRequest request, Long importId) 
             throws IOException, DocumentException {
@@ -69,10 +74,11 @@ public class ReportExportService {
         TemplateImport templateImport = templateImportRepository.findById(importId)
                 .orElseThrow(() -> new RuntimeException("Template import not found for importId: " + importId));
 
-        log.info("Found template import: id={}, resourcePath={}, filePath={}", 
+        log.info("Found template import: id={}, resourcePath={}, filePath={}, filename={}", 
                 templateImport.getId(), 
                 templateImport.getResourcePath(), 
-                templateImport.getFilePath());
+                templateImport.getFilePath(),
+                templateImport.getOriginalFilename());
 
         // 2. Load template file
         byte[] templateFile;
@@ -106,7 +112,41 @@ public class ReportExportService {
         ReportData reportData = reportTemplateService.buildReportData(template, request);
         log.info("Queried data: {} rows", reportData.getRows().size());
 
-        // 4. Prepare data model for template
+        // 4. Determine template type from file extension
+        String filename = templateImport.getOriginalFilename().toLowerCase();
+        TemplateFileType fileType = detectTemplateFileType(filename);
+        log.info("Detected template file type: {} for file: {}", fileType, filename);
+
+        // 5. Route to appropriate export method based on file type
+        return switch (fileType) {
+            case WORD -> exportWordTemplate(templateFile, reportData);
+            case PDF_HTML -> exportPdfTemplate(templateFile, reportData);
+            case EXCEL -> exportExcelTemplate(templateFile, reportData, template);
+            default -> throw new RuntimeException("Unsupported template file type: " + filename);
+        };
+    }
+
+    /**
+     * Detect template file type from filename extension
+     */
+    private TemplateFileType detectTemplateFileType(String filename) {
+        if (filename.endsWith(".docx")) {
+            return TemplateFileType.WORD;
+        } else if (filename.endsWith(".html") || filename.endsWith(".htm")) {
+            return TemplateFileType.PDF_HTML;
+        } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+            return TemplateFileType.EXCEL;
+        }
+        return TemplateFileType.UNKNOWN;
+    }
+
+    /**
+     * Export using Word template (.docx)
+     */
+    private byte[] exportWordTemplate(byte[] templateFile, ReportData reportData) throws IOException {
+        log.info("Exporting Word template with direct table insertion");
+        
+        // Prepare data model for template
         Map<String, Object> dataModel = prepareDataModelForTemplate(reportData);
         
         // Log detailed data model info for debugging
@@ -124,18 +164,460 @@ public class ReportExportService {
             }
         }
 
-        // 5. Fill data into template - NEW APPROACH: Direct table manipulation
-        // Instead of relying on POI-TL loop tags, we directly insert rows into the table
-        log.info("Using direct table insertion method...");
-        
         try {
             byte[] result = renderTemplateWithDirectTableInsertion(templateFile, dataModel);
-            log.info("Report exported successfully with direct table insertion: {} bytes", result.length);
+            log.info("Word template exported successfully: {} bytes", result.length);
             return result;
         } catch (Exception e) {
-            log.error("Direct table insertion failed: {}", e.getMessage(), e);
-            throw new RuntimeException("Template rendering failed: " + e.getMessage(), e);
+            log.error("Word template export failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Word template rendering failed: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Export using PDF HTML template (.html)
+     * Uses Thymeleaf to process HTML template, then converts to PDF
+     * Supports Vietnamese characters with embedded fonts
+     */
+    private byte[] exportPdfTemplate(byte[] templateFile, ReportData reportData) throws IOException, DocumentException {
+        log.info("Exporting PDF from HTML template with Vietnamese font support");
+        
+        try {
+            // Convert template bytes to string with UTF-8 encoding
+            String htmlTemplate = new String(templateFile, java.nio.charset.StandardCharsets.UTF_8);
+            
+            // Process HTML template with Thymeleaf
+            org.thymeleaf.context.Context context = new org.thymeleaf.context.Context();
+            context.setVariable("report", reportData);
+            context.setVariable("dateTimeFormatter", DATE_TIME_FORMATTER);
+            
+            // Prepare data model
+            Map<String, Object> dataModel = prepareDataModelForTemplate(reportData);
+            
+            // Convert logo to Base64 for HTML img tag if available
+            if (dataModel.containsKey("logoData") && dataModel.get("logoData") != null) {
+                byte[] logoBytes = (byte[]) dataModel.get("logoData");
+                String logoBase64 = java.util.Base64.getEncoder().encodeToString(logoBytes);
+                dataModel.put("logoBase64", "data:image/png;base64," + logoBase64);
+                log.debug("Logo converted to Base64 for HTML template: {} bytes", logoBytes.length);
+            }
+            
+            dataModel.forEach(context::setVariable);
+            
+            // Create a temporary Thymeleaf engine for inline template processing
+            org.thymeleaf.templateresolver.StringTemplateResolver resolver = 
+                    new org.thymeleaf.templateresolver.StringTemplateResolver();
+            resolver.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
+            
+            org.thymeleaf.spring6.SpringTemplateEngine engine = new org.thymeleaf.spring6.SpringTemplateEngine();
+            engine.setTemplateResolver(resolver);
+            
+            // Process template
+            String processedHtml = engine.process(htmlTemplate, context);
+            
+            // Ensure HTML has proper meta charset declaration
+            if (!processedHtml.contains("charset") && !processedHtml.contains("UTF-8")) {
+                processedHtml = processedHtml.replaceFirst("<head>", 
+                    "<head><meta charset=\"UTF-8\"/>");
+            }
+            
+            // Convert HTML to PDF using Flying Saucer with Vietnamese font support
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            org.xhtmlrenderer.pdf.ITextRenderer renderer = new org.xhtmlrenderer.pdf.ITextRenderer();
+            
+            try {
+                // Set document with proper encoding
+                renderer.setDocumentFromString(processedHtml);
+                
+                // Get font resolver and add system fonts for Vietnamese support
+                org.xhtmlrenderer.pdf.ITextFontResolver fontResolver = renderer.getFontResolver();
+                
+                // Try to add common Vietnamese fonts from system
+                try {
+                    // Windows fonts
+                    addFontIfExists(fontResolver, "C:/Windows/Fonts/arial.ttf", "Arial");
+                    addFontIfExists(fontResolver, "C:/Windows/Fonts/times.ttf", "Times New Roman");
+                    addFontIfExists(fontResolver, "C:/Windows/Fonts/calibri.ttf", "Calibri");
+                    
+                    // Linux fonts
+                    addFontIfExists(fontResolver, "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVu Sans");
+                    addFontIfExists(fontResolver, "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "Liberation Sans");
+                    
+                    log.info("Vietnamese fonts loaded successfully");
+                } catch (Exception fontEx) {
+                    log.warn("Could not load some system fonts, Vietnamese characters may not display correctly: {}", 
+                            fontEx.getMessage());
+                }
+                
+                renderer.layout();
+                renderer.createPDF(outputStream);
+            } finally {
+                renderer.finishPDF();
+            }
+            
+            log.info("PDF template exported successfully: {} bytes", outputStream.size());
+            return outputStream.toByteArray();
+            
+        } catch (Exception e) {
+            log.error("PDF template export failed: {}", e.getMessage(), e);
+            throw new RuntimeException("PDF template rendering failed: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Helper method to add font if file exists
+     */
+    private void addFontIfExists(org.xhtmlrenderer.pdf.ITextFontResolver fontResolver, 
+                                  String fontPath, 
+                                  String fontName) {
+        try {
+            java.io.File fontFile = new java.io.File(fontPath);
+            if (fontFile.exists()) {
+                fontResolver.addFont(fontPath, 
+                                    com.lowagie.text.pdf.BaseFont.IDENTITY_H, 
+                                    com.lowagie.text.pdf.BaseFont.EMBEDDED);
+                log.debug("Added font: {} from {}", fontName, fontPath);
+            }
+        } catch (Exception e) {
+            log.trace("Could not add font {} from {}: {}", fontName, fontPath, e.getMessage());
+        }
+    }
+
+    /**
+     * Load organization logo from resources or database
+     * Priority: 1) Database logoData, 2) Resources path from logoUrl, 3) Default logo
+     */
+    private byte[] loadOrganizationLogo(org.facenet.entity.report.OrganizationSettings org) {
+        if (org == null) {
+            return loadDefaultLogo();
+        }
+        
+        // Priority 1: Logo data stored in database
+        if (org.getLogoData() != null && org.getLogoData().length > 0) {
+            log.debug("Loading logo from database: {} bytes", org.getLogoData().length);
+            return org.getLogoData();
+        }
+        
+        // Priority 2: Logo path in resources
+        if (org.getLogoUrl() != null && !org.getLogoUrl().isEmpty()) {
+            try {
+                // Try to load from classpath resources
+                org.springframework.core.io.Resource resource = 
+                    new org.springframework.core.io.ClassPathResource(org.getLogoUrl());
+                if (resource.exists()) {
+                    byte[] logoBytes = resource.getInputStream().readAllBytes();
+                    log.debug("Loading logo from resources: {} -> {} bytes", org.getLogoUrl(), logoBytes.length);
+                    return logoBytes;
+                } else {
+                    log.warn("Logo file not found in resources: {}", org.getLogoUrl());
+                }
+            } catch (Exception e) {
+                log.error("Failed to load logo from resources: {}", org.getLogoUrl(), e);
+            }
+        }
+        
+        // Priority 3: Default logo
+        return loadDefaultLogo();
+    }
+
+    /**
+     * Load default logo from resources
+     */
+    private byte[] loadDefaultLogo() {
+        try {
+            org.springframework.core.io.Resource resource = 
+                new org.springframework.core.io.ClassPathResource("images/default-logo.png");
+            if (resource.exists()) {
+                byte[] logoBytes = resource.getInputStream().readAllBytes();
+                log.debug("Loading default logo: {} bytes", logoBytes.length);
+                return logoBytes;
+            }
+        } catch (Exception e) {
+            log.trace("No default logo available: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Export using Excel template (.xlsx)
+     * Reads template, fills data into predefined table structure
+     */
+    private byte[] exportExcelTemplate(byte[] templateFile, ReportData reportData, ReportTemplate template) 
+            throws IOException {
+        log.info("Exporting Excel template with data insertion");
+        
+        try (ByteArrayInputStream templateStream = new ByteArrayInputStream(templateFile);
+             org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = 
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(templateStream)) {
+            
+            // Get first sheet (assuming template uses first sheet)
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            
+            // Prepare data model
+            Map<String, Object> dataModel = prepareDataModelForTemplate(reportData);
+            log.info("Data model prepared with keys: {}", dataModel.keySet());
+            log.info("Sample values - organizationName: {}", dataModel.get("organizationName"));
+            log.info("Sample values - reportTitle: {}", dataModel.get("reportTitle"));
+            log.info("Sample values - startTime: {}", dataModel.get("startTime"));
+            log.info("Sample values - data1Name: {}", dataModel.get("data1Name"));
+            
+            // Insert data rows into table FIRST (before replacing placeholders)
+            // This is important because shiftRows can destroy placeholder replacements
+            List<?> rowsList = dataModel.get("rows") instanceof List ? (List<?>) dataModel.get("rows") : null;
+            if (rowsList != null && !rowsList.isEmpty()) {
+                insertDataIntoExcelTable(sheet, rowsList);
+            } else {
+                log.warn("No rows data to insert into Excel table");
+            }
+            
+            // Replace simple placeholders AFTER data insertion
+            // This ensures placeholders are replaced in the final structure
+            replaceExcelPlaceholders(sheet, dataModel);
+            
+            // Write output - try-with-resources will auto-close workbook
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            workbook.write(outputStream);
+            
+            byte[] result = outputStream.toByteArray();
+            log.info("Excel template exported successfully: {} bytes", result.length);
+            return result;
+            
+        } catch (Exception e) {
+            log.error("Excel template export failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Excel template rendering failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Replace placeholders in Excel template (SIMPLIFIED - no merged cells, no formulas)
+     */
+    private void replaceExcelPlaceholders(org.apache.poi.ss.usermodel.Sheet sheet, 
+                                          Map<String, Object> dataModel) {
+        log.info("Replacing Excel placeholders in {} rows", sheet.getLastRowNum() + 1);
+        log.info("Available data model keys: {}", dataModel.keySet());
+        
+        int replacedCount = 0;
+        
+        // Iterate through all rows
+        for (int rowIndex = 0; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            org.apache.poi.ss.usermodel.Row row = sheet.getRow(rowIndex);
+            if (row == null) continue;
+            
+            // Iterate through all cells in the row
+            int lastCellNum = row.getLastCellNum();
+            if (lastCellNum == -1) continue;
+            
+            for (int cellIndex = 0; cellIndex < lastCellNum; cellIndex++) {
+                org.apache.poi.ss.usermodel.Cell cell = row.getCell(cellIndex);
+                if (cell == null) continue;
+                
+                // Only process STRING cells
+                if (cell.getCellType() != org.apache.poi.ss.usermodel.CellType.STRING) {
+                    continue;
+                }
+                
+                String cellValue = cell.getStringCellValue();
+                if (cellValue == null || !cellValue.contains("{{")) {
+                    continue;
+                }
+                
+                log.info("Processing cell [{}][{}]: '{}'", rowIndex, cellIndex, cellValue);
+                String originalValue = cellValue;
+                
+                // Replace all placeholders in cell
+                for (Map.Entry<String, Object> entry : dataModel.entrySet()) {
+                    String key = entry.getKey();
+                    if ("rows".equals(key)) continue; // Skip rows - handled separately
+                    
+                    String placeholder = "{{" + key + "}}";
+                    if (cellValue.contains(placeholder)) {
+                        Object value = entry.getValue();
+                        String replacement = value != null ? value.toString() : "";
+                        cellValue = cellValue.replace(placeholder, replacement);
+                        log.info("  ✓ Replaced '{}' with: '{}'", placeholder, replacement);
+                        replacedCount++;
+                    }
+                }
+                
+                // Handle nested placeholders (e.g., {{summary.totalRecords}})
+                if (cellValue.contains("{{summary.")) {
+                    Object summaryObj = dataModel.get("summary");
+                    if (summaryObj instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> summary = (Map<String, Object>) summaryObj;
+                        for (Map.Entry<String, Object> entry : summary.entrySet()) {
+                            String placeholder = "{{summary." + entry.getKey() + "}}";
+                            if (cellValue.contains(placeholder)) {
+                                String replacement = entry.getValue() != null ? entry.getValue().toString() : "";
+                                cellValue = cellValue.replace(placeholder, replacement);
+                                log.info("  ✓ Replaced '{}' with: '{}'", placeholder, replacement);
+                                replacedCount++;
+                            }
+                        }
+                    }
+                }
+                
+                // Update cell if value changed
+                if (!cellValue.equals(originalValue)) {
+                    cell.setCellValue(cellValue);
+                    log.info("  → Updated cell [{}][{}]: '{}' → '{}'", rowIndex, cellIndex, originalValue, cellValue);
+                }
+                
+                // Warn if still contains placeholder
+                if (cellValue.contains("{{")) {
+                    log.warn("  ⚠ Cell [{}][{}] still contains unreplaced placeholders: '{}'", rowIndex, cellIndex, cellValue);
+                }
+            }
+        }
+        
+        log.info("Excel placeholders replacement completed: {} replacements made", replacedCount);
+    }
+
+    /**
+     * Insert data rows into Excel table
+     * Assumes: Row with {{rowNumber}} placeholder is the template row
+     */
+    private void insertDataIntoExcelTable(org.apache.poi.ss.usermodel.Sheet sheet, List<?> rowsData) {
+        log.info("Inserting {} rows into Excel table", rowsData.size());
+        
+        // Find template row (contains {{rowNumber}} or other row placeholders)
+        int templateRowIndex = -1;
+        org.apache.poi.ss.usermodel.Row templateRow = null;
+        
+        for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+            org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
+            if (row == null) continue;
+            
+            for (org.apache.poi.ss.usermodel.Cell cell : row) {
+                if (cell != null && cell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
+                    String cellValue = cell.getStringCellValue();
+                    if (cellValue != null && (cellValue.contains("{{rowNumber}}") || 
+                                             cellValue.contains("{{scaleName}}") ||
+                                             cellValue.contains("{{data1Total}}"))) {
+                        templateRowIndex = i;
+                        templateRow = row;
+                        break;
+                    }
+                }
+            }
+            if (templateRowIndex != -1) break;
+        }
+        
+        if (templateRowIndex == -1) {
+            log.warn("No template row found in Excel (looking for {{rowNumber}} or similar placeholders)");
+            return;
+        }
+        
+        log.info("Found template row at index: {}", templateRowIndex);
+        
+        // Detect column mapping from template row
+        String[] columnKeys = detectExcelColumnKeys(templateRow);
+        log.info("Detected Excel column mapping: {}", String.join(", ", columnKeys));
+        
+        // Insert data rows AFTER template row
+        for (int i = 0; i < rowsData.size(); i++) {
+            Object rowObj = rowsData.get(i);
+            if (!(rowObj instanceof Map)) continue;
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rowData = (Map<String, Object>) rowObj;
+            
+            // Shift existing rows down to make space (if there are rows below)
+            int insertPosition = templateRowIndex + 1 + i;
+            if (insertPosition <= sheet.getLastRowNum()) {
+                sheet.shiftRows(insertPosition, sheet.getLastRowNum(), 1, true, false);
+            }
+            
+            // Create new row at insert position
+            org.apache.poi.ss.usermodel.Row newRow = sheet.createRow(insertPosition);
+            
+            // Copy style from template and fill data
+            fillExcelRowWithData(newRow, templateRow, rowData, columnKeys);
+            
+            log.debug("Inserted data row {} at position {}", i + 1, insertPosition);
+        }
+        
+        // Remove template row (now shifted down by rowsData.size() positions)
+        int templateRowNewIndex = templateRowIndex;
+        org.apache.poi.ss.usermodel.Row rowToRemove = sheet.getRow(templateRowNewIndex);
+        if (rowToRemove != null) {
+            sheet.removeRow(rowToRemove);
+            // Shift remaining rows up to fill the gap
+            if (templateRowNewIndex < sheet.getLastRowNum()) {
+                sheet.shiftRows(templateRowNewIndex + 1, sheet.getLastRowNum(), -1);
+            }
+            log.info("Removed template row at index {}", templateRowNewIndex);
+        }
+        
+        log.info("Successfully inserted {} data rows into Excel and removed template", rowsData.size());
+    }
+
+    /**
+     * Detect column keys from Excel template row
+     */
+    private String[] detectExcelColumnKeys(org.apache.poi.ss.usermodel.Row templateRow) {
+        int lastCellNum = templateRow.getLastCellNum();
+        String[] keys = new String[lastCellNum];
+        
+        for (int i = 0; i < lastCellNum; i++) {
+            org.apache.poi.ss.usermodel.Cell cell = templateRow.getCell(i);
+            if (cell != null && cell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
+                String cellValue = cell.getStringCellValue();
+                String key = extractPlaceholder(cellValue);
+                
+                if (key != null) {
+                    keys[i] = key;
+                } else {
+                    keys[i] = "unknown_" + i;
+                }
+            } else {
+                keys[i] = "unknown_" + i;
+            }
+        }
+        
+        return keys;
+    }
+
+    /**
+     * Fill Excel row with data using column mapping
+     */
+    private void fillExcelRowWithData(org.apache.poi.ss.usermodel.Row newRow,
+                                      org.apache.poi.ss.usermodel.Row templateRow,
+                                      Map<String, Object> rowData,
+                                      String[] columnKeys) {
+        for (int i = 0; i < columnKeys.length; i++) {
+            org.apache.poi.ss.usermodel.Cell newCell = newRow.createCell(i);
+            
+            // Copy style from template
+            org.apache.poi.ss.usermodel.Cell templateCell = templateRow.getCell(i);
+            if (templateCell != null && templateCell.getCellStyle() != null) {
+                newCell.setCellStyle(templateCell.getCellStyle());
+            }
+            
+            // Fill data
+            String key = columnKeys[i];
+            Object value = rowData.get(key);
+            
+            if (value != null) {
+                if (value instanceof Number) {
+                    newCell.setCellValue(((Number) value).doubleValue());
+                } else {
+                    newCell.setCellValue(value.toString());
+                }
+            } else {
+                newCell.setCellValue("");
+            }
+        }
+    }
+
+    /**
+     * Template file type enumeration
+     */
+    private enum TemplateFileType {
+        WORD,      // .docx
+        PDF_HTML,  // .html for PDF generation
+        EXCEL,     // .xlsx
+        UNKNOWN
     }
     
     /**
@@ -143,7 +625,7 @@ public class ReportExportService {
      * This method finds the table in Word, then directly inserts data rows
      * Template only needs: Header row + one template row (will be copied and removed)
      */
-    private byte[] renderTemplateWithDirectTableInsertion(byte[] templateFile, Map<String, Object> dataModel) throws Exception {
+    private byte[] renderTemplateWithDirectTableInsertion(byte[] templateFile, Map<String, Object> dataModel) throws IOException {
         log.info("Starting direct table insertion method...");
         
         try (ByteArrayInputStream templateStream = new ByteArrayInputStream(templateFile);
@@ -197,12 +679,18 @@ public class ReportExportService {
     private void replacePlaceholdersInParagraph(org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph, 
                                                  Map<String, Object> dataModel) {
         String text = paragraph.getText();
-        if (text == null || !text.contains("{{")) return;
+        if (text == null || (!text.contains("{{") && !text.contains("[[LOGO]]"))) return;
+        
+        // Handle logo placeholder
+        if (text.contains("[[LOGO]]")) {
+            insertLogoIntoParagraph(paragraph, dataModel);
+            return;
+        }
         
         // Replace placeholders
         for (Map.Entry<String, Object> entry : dataModel.entrySet()) {
             String key = entry.getKey();
-            if ("rows".equals(key)) continue; // Skip rows - handled separately
+            if ("rows".equals(key) || "logoData".equals(key)) continue; // Skip rows and logoData
             
             String placeholder = "{{" + key + "}}";
             if (text.contains(placeholder)) {
@@ -235,6 +723,44 @@ public class ReportExportService {
             }
             org.apache.poi.xwpf.usermodel.XWPFRun run = paragraph.createRun();
             run.setText(text);
+        }
+    }
+    
+    /**
+     * Insert logo into paragraph
+     */
+    private void insertLogoIntoParagraph(org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph, 
+                                         Map<String, Object> dataModel) {
+        if (!dataModel.containsKey("logoData") || dataModel.get("logoData") == null) {
+            log.warn("Logo placeholder found but no logo data available");
+            return;
+        }
+        
+        try {
+            byte[] logoBytes = (byte[]) dataModel.get("logoData");
+            
+            // Clear paragraph content
+            while (paragraph.getRuns().size() > 0) {
+                paragraph.removeRun(0);
+            }
+            
+            // Create run and insert picture
+            org.apache.poi.xwpf.usermodel.XWPFRun run = paragraph.createRun();
+            
+            try (java.io.ByteArrayInputStream logoStream = new java.io.ByteArrayInputStream(logoBytes)) {
+                // Insert picture with size: width 150px (approx 2 inches), height auto-scale
+                run.addPicture(
+                    logoStream,
+                    org.apache.poi.xwpf.usermodel.Document.PICTURE_TYPE_PNG,
+                    "logo.png",
+                    org.apache.poi.util.Units.toEMU(150), // width in pixels
+                    org.apache.poi.util.Units.toEMU(50)   // height in pixels
+                );
+                
+                log.info("Logo inserted into Word document: {} bytes", logoBytes.length);
+            }
+        } catch (Exception e) {
+            log.error("Failed to insert logo into Word document", e);
         }
     }
     
@@ -403,6 +929,17 @@ public class ReportExportService {
             model.put("phone", org.getPhone() != null ? org.getPhone() : "");
             model.put("email", org.getEmail() != null ? org.getEmail() : "");
             model.put("taxCode", org.getTaxCode() != null ? org.getTaxCode() : "");
+            
+            // Load logo
+            byte[] logoBytes = loadOrganizationLogo(org);
+            if (logoBytes != null) {
+                model.put("logoData", logoBytes);
+                model.put("hasLogo", true);
+                log.debug("Logo loaded: {} bytes", logoBytes.length);
+            } else {
+                model.put("hasLogo", false);
+                log.debug("No logo available");
+            }
         }
 
         // Header information
@@ -482,31 +1019,30 @@ public class ReportExportService {
         Map<String, Object> map = new HashMap<>();
         
         // Row number
-        map.put("rowNumber", row.getRowNumber());
+        map.put("rowNumber", row.getRowNumber() != null ? row.getRowNumber() : 0);
         
         // Scale information
-        map.put("scaleId", row.getScaleId());
-        map.put("scaleCode", row.getScaleCode());
-        map.put("scaleName", row.getScaleName());
-        map.put("location", row.getLocation());
+        map.put("scaleId", row.getScaleId() != null ? row.getScaleId() : 0L);
+        map.put("scaleCode", row.getScaleCode() != null ? row.getScaleCode() : "");
+        map.put("scaleName", row.getScaleName() != null ? row.getScaleName() : "");
+        map.put("location", row.getLocation() != null && !row.getLocation().isEmpty() && !"string".equalsIgnoreCase(row.getLocation()) 
+                ? row.getLocation() : "");
         
         // Period (for time-based grouping)
-        map.put("period", row.getPeriod());
+        map.put("period", row.getPeriod() != null ? row.getPeriod() : "");
         
         // Data totals
-        map.put("data1Total", row.getData1Total() != null ? NUMBER_FORMAT.format(row.getData1Total()) : "0");
-        map.put("data2Total", row.getData2Total() != null ? NUMBER_FORMAT.format(row.getData2Total()) : "0");
-        map.put("data3Total", row.getData3Total() != null ? NUMBER_FORMAT.format(row.getData3Total()) : "0");
-        map.put("data4Total", row.getData4Total() != null ? NUMBER_FORMAT.format(row.getData4Total()) : "0");
-        map.put("data5Total", row.getData5Total() != null ? NUMBER_FORMAT.format(row.getData5Total()) : "0");
+        map.put("data1Total", row.getData1Total() != null ? NUMBER_FORMAT.format(row.getData1Total()) : "0,00");
+        map.put("data2Total", row.getData2Total() != null ? NUMBER_FORMAT.format(row.getData2Total()) : "0,00");
+        map.put("data3Total", row.getData3Total() != null ? NUMBER_FORMAT.format(row.getData3Total()) : "0,00");
+        map.put("data4Total", row.getData4Total() != null ? NUMBER_FORMAT.format(row.getData4Total()) : "0,00");
+        map.put("data5Total", row.getData5Total() != null ? NUMBER_FORMAT.format(row.getData5Total()) : "0,00");
         
         // Record count
-        map.put("recordCount", row.getRecordCount());
+        map.put("recordCount", row.getRecordCount() != null ? row.getRecordCount() : 0);
         
         // Last time
-        if (row.getLastTime() != null) {
-            map.put("lastTime", DATE_TIME_FORMATTER.format(row.getLastTime()));
-        }
+        map.put("lastTime", row.getLastTime() != null ? DATE_TIME_FORMATTER.format(row.getLastTime()) : "");
 
         return map;
     }

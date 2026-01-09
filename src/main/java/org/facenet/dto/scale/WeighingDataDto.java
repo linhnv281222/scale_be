@@ -28,6 +28,9 @@ public class WeighingDataDto {
         private String scaleName;
         private OffsetDateTime createdAt;
         private OffsetDateTime lastTime;
+        private Long shiftId;
+        private String shiftCode;
+        private String shiftName;
         private String data1;
         private String data2;
         private String data3;
@@ -103,6 +106,9 @@ public class WeighingDataDto {
         private String protocolName;
         private OffsetDateTime createdAt;
         private OffsetDateTime lastTime;
+        private Long shiftId;
+        private String shiftCode;
+        private String shiftName;
         private String data1;
         private String data2;
         private String data3;
