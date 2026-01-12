@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.response.ApiResponse;
 import org.facenet.dto.scale.ScaleDto;
 import org.facenet.service.scale.ScaleService;
 import org.springframework.http.HttpStatus;
@@ -40,7 +41,7 @@ public class ScaleController {
         description = "Retrieve paginated list of scales with optional search and filters. " +
                      "Search: name, model. Filters: locationId, manufacturerId, protocolId, direction, isActive, model"
     )
-    public ResponseEntity<PageResponseDto<ScaleDto.Response>> getAllScales(
+    public ResponseEntity<ApiResponse<?>> getAllScales(
             @RequestParam(value = "page", defaultValue = "0") Integer page,
             @RequestParam(value = "size", defaultValue = "10") Integer size,
             @RequestParam(value = "sort", required = false) String sort,
@@ -80,7 +81,7 @@ public class ScaleController {
             .build();
         
         PageResponseDto<ScaleDto.Response> response = scaleService.getAllScales(pageRequest, filters);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
@@ -138,13 +139,13 @@ public class ScaleController {
     }
 
     /**
-     * Delete scale
+     * Delete scale (soft delete)
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
-        summary = "Delete scale",
-        description = "Delete a scale by ID. Associated configuration will be deleted automatically."
+        summary = "Delete scale (soft delete)",
+        description = "Soft delete a scale by ID (sets is_active to false). Scale can be reactivated later."
     )
     public ResponseEntity<Void> deleteScale(@PathVariable Long id) {
         scaleService.deleteScale(id);

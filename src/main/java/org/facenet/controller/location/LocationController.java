@@ -133,11 +133,11 @@ public class LocationController {
     }
 
     /**
-     * 5. Delete location
+     * 5. Delete location (soft delete)
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    @Operation(summary = "Delete location", description = "Delete a location")
+    @Operation(summary = "Delete location (soft delete)", description = "Soft delete a location (sets is_active to false)")
     public ResponseEntity<Void> deleteLocation(
             @PathVariable("id") Long id) {
         locationService.deleteLocation(id);

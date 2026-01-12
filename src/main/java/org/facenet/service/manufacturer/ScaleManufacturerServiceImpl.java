@@ -143,14 +143,15 @@ public class ScaleManufacturerServiceImpl implements ScaleManufacturerService {
         @CacheEvict(value = "manufacturers", allEntries = true)
     })
     public void deleteManufacturer(Long id) {
-        log.debug("Deleting manufacturer with id: {}", id);
+        log.debug("Soft deleting manufacturer with id: {}", id);
         
         ScaleManufacturer manufacturer = manufacturerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Manufacturer", "id", id));
 
-        // TODO: Check if manufacturer is used by any scales before deleting
+        // Soft delete: set is_active to false
+        manufacturer.setIsActive(false);
+        manufacturerRepository.save(manufacturer);
         
-        manufacturerRepository.delete(manufacturer);
-        log.info("Deleted manufacturer with id: {}", id);
+        log.info("Soft deleted manufacturer with id: {}", id);
     }
 }

@@ -218,7 +218,10 @@ public class ReportTemplateService {
         if (template.getReportType() != ReportTemplate.ReportType.WORD) {
             throw new IllegalArgumentException("Template is not WORD type: " + id);
         }
-        templateRepository.delete(template);
+        
+        // Soft delete: set is_active to false
+        template.setIsActive(false);
+        templateRepository.save(template);
     }
 
     private void unsetOtherDefaults(Long keepTemplateId, ReportTemplate.ReportType type) {
@@ -535,14 +538,17 @@ public class ReportTemplateService {
                 .toTime(endTime)
                 .interval(interval)
                 .aggregationByField(aggregationByField)
+                .page(0)
+                .size(Integer.MAX_VALUE)  // Get all data for export
                 .build();
 
-        IntervalReportResponseDto intervalResponse = scaleReportService.generateIntervalReport(intervalRequest);
+        org.facenet.common.pagination.PageResponseDto<IntervalReportResponseDto.Row> pagedResponse = 
+                scaleReportService.generateIntervalReport(intervalRequest);
 
         List<ReportData.ReportRow> rows = new ArrayList<>();
         int rowNumber = 1;
-        if (intervalResponse.getRows() != null) {
-            for (IntervalReportResponseDto.Row r : intervalResponse.getRows()) {
+        if (pagedResponse.getData() != null) {
+            for (IntervalReportResponseDto.Row r : pagedResponse.getData()) {
                 IntervalReportResponseDto.ScaleInfo s = r != null ? r.getScale() : null;
                 Map<String, IntervalReportResponseDto.DataFieldValue> dv = r != null ? r.getDataValues() : null;
 
@@ -577,6 +583,14 @@ public class ReportTemplateService {
                 ? request.getReportTitle()
                 : buildTitle(template, startTime, endTime);
 
+        // Build aggregation metadata from request
+        Map<String, String> aggregationByFieldMetadata = new HashMap<>();
+        if (aggregationByField != null) {
+            for (Map.Entry<String, IntervalReportRequestDto.AggregationMethod> e : aggregationByField.entrySet()) {
+                aggregationByFieldMetadata.put(e.getKey(), e.getValue().name());
+            }
+        }
+
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("totalLogs", rows.stream().mapToInt(r -> r.getRecordCount() != null ? r.getRecordCount() : 0).sum());
         metadata.put("dateRange", formatDateRange(startTime, endTime));
@@ -585,17 +599,17 @@ public class ReportTemplateService {
         metadata.put("template", template);
         metadata.put("intervalEngine", true);
         metadata.put("timeInterval", request.getTimeInterval() != null ? request.getTimeInterval().name() : null);
-        metadata.put("aggregationByField", intervalResponse.getAggregationByField());
+        metadata.put("aggregationByField", aggregationByFieldMetadata);
 
-        // Column names: prefer first row (already applies special "Khối lượng" rename), fallback to response map
+        // Column names: prefer first row (already applies special "Khối lượng" rename)
         String data1Name = null;
         String data2Name = null;
         String data3Name = null;
         String data4Name = null;
         String data5Name = null;
 
-        if (!rows.isEmpty() && intervalResponse.getRows() != null && !intervalResponse.getRows().isEmpty()) {
-            IntervalReportResponseDto.Row first = intervalResponse.getRows().get(0);
+        if (!rows.isEmpty() && pagedResponse.getData() != null && !pagedResponse.getData().isEmpty()) {
+            IntervalReportResponseDto.Row first = pagedResponse.getData().get(0);
             if (first != null && first.getDataValues() != null) {
                 data1Name = first.getDataValues().get("data_1") != null ? first.getDataValues().get("data_1").getName() : null;
                 data2Name = first.getDataValues().get("data_2") != null ? first.getDataValues().get("data_2").getName() : null;
@@ -605,16 +619,12 @@ public class ReportTemplateService {
             }
         }
 
-        if (data1Name == null || data2Name == null || data3Name == null || data4Name == null || data5Name == null) {
-            Map<String, String> fallback = intervalResponse.getDataFieldNames();
-            if (fallback != null) {
-                if (data1Name == null) data1Name = fallback.get("data_1");
-                if (data2Name == null) data2Name = fallback.get("data_2");
-                if (data3Name == null) data3Name = fallback.get("data_3");
-                if (data4Name == null) data4Name = fallback.get("data_4");
-                if (data5Name == null) data5Name = fallback.get("data_5");
-            }
-        }
+        // Fallback to default names if not set
+        if (data1Name == null) data1Name = "Data 1";
+        if (data2Name == null) data2Name = "Data 2";
+        if (data3Name == null) data3Name = "Data 3";
+        if (data4Name == null) data4Name = "Data 4";
+        if (data5Name == null) data5Name = "Data 5";
 
         data1Name = sanitizeDisplayName(data1Name);
         data2Name = sanitizeDisplayName(data2Name);

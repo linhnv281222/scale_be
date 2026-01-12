@@ -41,7 +41,7 @@ public class ScaleManufacturerController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
     @Operation(summary = "Get all manufacturers", 
                description = "Get list of manufacturers with pagination. Supports search (name/code/country/description), filter by code and country")
-    public ResponseEntity<ApiResponse<PageResponseDto<ScaleManufacturerDto.Response>>> getAllManufacturers(
+    public ResponseEntity<ApiResponse<?>> getAllManufacturers(
             @RequestParam(value = "page", defaultValue = "0") Integer page,
             @RequestParam(value = "size", defaultValue = "10") Integer size,
             @RequestParam(value = "sort", required = false) String sort,
@@ -116,11 +116,11 @@ public class ScaleManufacturerController {
     }
 
     /**
-     * 5. Delete manufacturer
+     * 5. Delete manufacturer (soft delete)
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    @Operation(summary = "Delete manufacturer", description = "Delete a scale manufacturer")
+    @Operation(summary = "Delete manufacturer (soft delete)", description = "Soft delete a scale manufacturer (sets is_active to false)")
     public ResponseEntity<Void> deleteManufacturer(
             @PathVariable("id") Long id) {
         manufacturerService.deleteManufacturer(id);

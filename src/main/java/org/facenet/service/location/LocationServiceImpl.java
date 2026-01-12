@@ -171,10 +171,12 @@ public class LocationServiceImpl implements LocationService {
             throw new ValidationException("Cannot delete location with scales. Found " + scaleCount + " scale(s)");
         }
 
-        locationRepository.delete(location);
+        // Soft delete: set is_active to false
+        location.setIsActive(false);
+        locationRepository.save(location);
         
         // Publish event
-        eventPublisher.publishEvent(new LocationChangedEvent(this, id, "DELETE"));
+        eventPublisher.publishEvent(new LocationChangedEvent(this, id, "SOFT_DELETE"));
     }
 
     private List<LocationDto.Response> buildTree(List<Location> locations) {

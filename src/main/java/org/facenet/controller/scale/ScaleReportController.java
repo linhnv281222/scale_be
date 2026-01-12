@@ -3,6 +3,7 @@ package org.facenet.controller.scale;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.response.ApiResponse;
 import org.facenet.dto.scale.IntervalReportRequestDto;
 import org.facenet.dto.scale.IntervalReportResponseDto;
@@ -46,15 +47,16 @@ public class ScaleReportController {
     /**
      * Generate interval statistics report (SHIFT/HOUR/DAY/WEEK) with per-field aggregation.
      * Supports filtering by manufacturer, location, and scale direction.
+     * Supports pagination via page and size parameters.
      */
     @PostMapping("/interval")
-    public ResponseEntity<ApiResponse<IntervalReportResponseDto>> generateIntervalReport(
+    public ResponseEntity<ApiResponse<?>> generateIntervalReport(
             @Valid @RequestBody IntervalReportRequestDto request) {
 
         log.info("[REPORT-API] Generating interval report: {}", request);
 
         try {
-            IntervalReportResponseDto report = reportService.generateIntervalReport(request);
+            PageResponseDto<IntervalReportResponseDto.Row> report = reportService.generateIntervalReport(request);
             return ResponseEntity.ok(ApiResponse.success(report));
         } catch (Exception e) {
             log.error("[REPORT-API] Error generating interval report: {}", e.getMessage(), e);

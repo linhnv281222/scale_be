@@ -180,11 +180,12 @@ public class ScaleServiceImpl implements ScaleService {
         Scale scale = scaleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scale", "id", id));
 
-        // Config and current state will be deleted via cascade
-        scaleRepository.delete(scale);
+        // Soft delete: set is_active to false
+        scale.setIsActive(false);
+        scaleRepository.save(scale);
         
         // Publish event
-        eventPublisher.publishEvent(new ConfigChangedEvent(this, id, "SCALE_DELETE"));
+        eventPublisher.publishEvent(new ConfigChangedEvent(this, id, "SCALE_SOFT_DELETE"));
     }
 
     private void createScaleConfig(Scale scale, ScaleDto.Request request) {

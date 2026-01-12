@@ -35,6 +35,10 @@ public class Location extends Auditable {
     @Column(name = "description", length = 255)
     private String description;
 
+    @Column(name = "is_active")
+    @Builder.Default
+    private Boolean isActive = true;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Location parent;

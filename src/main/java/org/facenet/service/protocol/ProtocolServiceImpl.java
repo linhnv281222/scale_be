@@ -142,14 +142,15 @@ public class ProtocolServiceImpl implements ProtocolService {
         @CacheEvict(value = "protocols", allEntries = true)
     })
     public void deleteProtocol(Long id) {
-        log.debug("Deleting protocol with id: {}", id);
+        log.debug("Soft deleting protocol with id: {}", id);
         
         Protocol protocol = protocolRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Protocol", "id", id));
 
-        // TODO: Check if protocol is used by any scales before deleting
+        // Soft delete: set is_active to false
+        protocol.setIsActive(false);
+        protocolRepository.save(protocol);
         
-        protocolRepository.delete(protocol);
-        log.info("Deleted protocol with id: {}", id);
+        log.info("Soft deleted protocol with id: {}", id);
     }
 }

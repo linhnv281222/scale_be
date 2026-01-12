@@ -21,7 +21,7 @@ public interface ReportService {
     /**
      * Generate interval statistics report (SHIFT/HOUR/DAY/WEEK) with per-field aggregation.
      */
-    IntervalReportResponseDto generateIntervalReport(IntervalReportRequestDto request);
+    org.facenet.common.pagination.PageResponseDto<IntervalReportResponseDto.Row> generateIntervalReport(IntervalReportRequestDto request);
 
     /**
      * Aggregate daily data into scale_daily_reports table

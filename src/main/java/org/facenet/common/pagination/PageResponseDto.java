@@ -17,8 +17,8 @@ import java.util.List;
 @AllArgsConstructor
 public class PageResponseDto<T> {
     
-    @JsonProperty("content")
-    private List<T> content;
+    @JsonProperty("data")
+    private List<T> data;
     
     @JsonProperty("page")
     private Integer page;
@@ -49,7 +49,7 @@ public class PageResponseDto<T> {
      */
     public static <T> PageResponseDto<T> from(org.springframework.data.domain.Page<T> page) {
         return PageResponseDto.<T>builder()
-            .content(page.getContent())
+            .data(page.getContent())
             .page(page.getNumber())
             .size(page.getSize())
             .totalElements(page.getTotalElements())

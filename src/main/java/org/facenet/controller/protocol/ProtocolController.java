@@ -39,7 +39,7 @@ public class ProtocolController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
     @Operation(summary = "Get all protocols", 
                description = "Get list of protocols with pagination. Supports search (name/code/description), filter by code and connectionType")
-    public ResponseEntity<ApiResponse<PageResponseDto<ProtocolDto.Response>>> getAllProtocols(
+    public ResponseEntity<ApiResponse<?>> getAllProtocols(
             @RequestParam(value = "page", defaultValue = "0") Integer page,
             @RequestParam(value = "size", defaultValue = "10") Integer size,
             @RequestParam(value = "sort", required = false) String sort,
@@ -104,11 +104,11 @@ public class ProtocolController {
     }
 
     /**
-     * 5. Delete protocol
+     * 5. Delete protocol (soft delete)
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    @Operation(summary = "Delete protocol", description = "Delete a communication protocol")
+    @Operation(summary = "Delete protocol (soft delete)", description = "Soft delete a communication protocol (sets is_active to false)")
     public ResponseEntity<Void> deleteProtocol(
             @PathVariable("id") Long id) {
         protocolService.deleteProtocol(id);

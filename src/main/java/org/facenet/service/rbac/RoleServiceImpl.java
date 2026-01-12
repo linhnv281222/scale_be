@@ -114,9 +114,11 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional
     public void deleteRole(Integer id) {
-        if (!roleRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Role", "id", id);
-        }
-        roleRepository.deleteById(id);
+        Role role = roleRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
+        
+        // Soft delete: set is_active to false
+        role.setIsActive(false);
+        roleRepository.save(role);
     }
 }

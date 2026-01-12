@@ -29,6 +29,10 @@ public class Role extends Auditable {
     @Column(name = "code", unique = true, nullable = false, length = 50)
     private String code;
 
+    @Column(name = "is_active")
+    @Builder.Default
+    private Boolean isActive = true;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "role_permissions",

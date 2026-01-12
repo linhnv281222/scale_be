@@ -36,6 +36,10 @@ public class User extends Auditable {
     @Builder.Default
     private Short status = 1;
 
+    @Column(name = "is_active")
+    @Builder.Default
+    private Boolean isActive = true;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "user_roles",

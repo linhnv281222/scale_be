@@ -97,6 +97,9 @@ public class ShiftServiceImpl implements ShiftService {
     public void delete(Long id) {
         Shift shift = shiftRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", id));
-        shiftRepository.delete(shift);
+        
+        // Soft delete: set is_active to false
+        shift.setIsActive(false);
+        shiftRepository.save(shift);
     }
 }

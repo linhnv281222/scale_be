@@ -31,7 +31,7 @@ public class ShiftController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
-    public ResponseEntity<ApiResponse<PageResponseDto<ShiftDto.Response>>> getAll(
+    public ResponseEntity<ApiResponse<?>> getAll(
             @RequestParam(value = "page", defaultValue = "0") Integer page,
             @RequestParam(value = "size", defaultValue = "10") Integer size,
             @RequestParam(value = "sort", required = false) String sort,
@@ -77,7 +77,7 @@ public class ShiftController {
         
         PageRequestDto pageRequest = PageRequestDto.builder().page(0).size(10000).build();
         PageResponseDto<ShiftDto.Response> result = shiftService.getAll(pageRequest, filters);
-        return ResponseEntity.ok(ApiResponse.success(result.getContent()));
+        return ResponseEntity.ok(ApiResponse.success(result.getData()));
     }
 
     @GetMapping("/{id}")

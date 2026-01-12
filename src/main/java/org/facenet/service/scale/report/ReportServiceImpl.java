@@ -2,6 +2,7 @@ package org.facenet.service.scale.report;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.scale.IntervalReportRequestDto;
 import org.facenet.dto.scale.IntervalReportResponseDto;
 import org.facenet.dto.scale.ReportRequestDto;
@@ -62,8 +63,23 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public IntervalReportResponseDto generateIntervalReport(IntervalReportRequestDto request) {
+    public PageResponseDto<IntervalReportResponseDto.Row> generateIntervalReport(IntervalReportRequestDto request) {
         validateIntervalRequest(request);
+
+        // Pagination parameters with defaults
+        int page = request.getPage() != null ? request.getPage() : 0;
+        int size = request.getSize() != null ? request.getSize() : 20;
+        
+        // Validate and limit page size
+        if (size > 1000) {
+            size = 1000;
+        }
+        if (size <= 0) {
+            size = 20;
+        }
+        if (page < 0) {
+            page = 0;
+        }
 
         List<Long> scaleIdsUsed = resolveScaleIdsForIntervalReport(request);
         Map<Long, Map<String, DataFieldMeta>> metaByScaleId = resolveDataFieldMetaByScale(scaleIdsUsed);
@@ -78,32 +94,37 @@ public class ReportServiceImpl implements ReportService {
 
         Map<String, IntervalReportRequestDto.AggregationMethod> effectiveMethods = resolveEffectiveMethods(request, sampleNames);
 
-        String sql = buildIntervalQuery(request, effectiveMethods, cumulativeScaleIdsByField);
-        log.debug("[REPORT] Interval query: {}", sql);
+        // Build query with pagination
+        String countSql = buildIntervalCountQuery(request, effectiveMethods, cumulativeScaleIdsByField);
+        Long totalElements = jdbcTemplate.queryForObject(countSql, Long.class);
+        
+        if (totalElements == null) {
+            totalElements = 0L;
+        }
+
+        String sql = buildIntervalQueryWithPagination(request, effectiveMethods, cumulativeScaleIdsByField, page, size);
+        log.debug("[REPORT] Interval query with pagination: {}", sql);
 
         List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
         List<IntervalReportResponseDto.Row> rows = mapIntervalRows(results, metaByScaleId, scaleInfoMap);
 
-        Map<String, String> methodStrings = new HashMap<>();
-        for (Map.Entry<String, IntervalReportRequestDto.AggregationMethod> e : effectiveMethods.entrySet()) {
-            methodStrings.put(e.getKey(), e.getValue().name());
-        }
+        // Calculate pagination metadata
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        boolean isFirst = page == 0;
+        boolean isLast = page >= totalPages - 1;
+        boolean hasNext = page < totalPages - 1;
+        boolean hasPrevious = page > 0;
 
-        // Build response with appropriate date/time format
-        String fromDateStr = request.getFromTime() != null 
-            ? request.getFromTime().toString() 
-            : request.getFromDate().toString();
-        String toDateStr = request.getToTime() != null 
-            ? request.getToTime().toString() 
-            : request.getToDate().toString();
-        
-        return IntervalReportResponseDto.builder()
-                .interval(request.getInterval())
-                .fromDate(fromDateStr)
-                .toDate(toDateStr)
-                .dataFieldNames(sampleNames)
-                .aggregationByField(methodStrings)
-                .rows(rows)
+        return PageResponseDto.<IntervalReportResponseDto.Row>builder()
+                .data(rows)
+                .page(page)
+                .size(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .isFirst(isFirst)
+                .isLast(isLast)
+                .hasNext(hasNext)
+                .hasPrevious(hasPrevious)
                 .build();
     }
 
@@ -541,6 +562,77 @@ public class ReportServiceImpl implements ReportService {
             return scaleIds.toString().replaceAll("[\\[\\]]", "");
         }
         return "(SELECT id FROM scales WHERE is_active = true)";
+    }
+
+    /**
+     * Build count query for pagination
+     */
+    private String buildIntervalCountQuery(
+            IntervalReportRequestDto request,
+            Map<String, IntervalReportRequestDto.AggregationMethod> methods,
+            Map<String, Set<Long>> cumulativeScaleIdsByField
+    ) {
+        String scaleFilter = buildScaleIdsFilter(request.getScaleIds());
+
+        String start;
+        String end;
+        if (request.getFromTime() != null && request.getToTime() != null) {
+            start = request.getFromTime().toString();
+            end = request.getToTime().toString();
+        } else {
+            start = request.getFromDate() + " 00:00:00+00";
+            end = request.getToDate() + " 23:59:59+00";
+        }
+
+        String timeGroupBy;
+        boolean isShift = request.getInterval() == IntervalReportRequestDto.TimeInterval.SHIFT;
+
+        switch (request.getInterval()) {
+            case HOUR -> timeGroupBy = "DATE_TRUNC('hour', wl.created_at)";
+            case DAY -> timeGroupBy = "DATE_TRUNC('day', wl.created_at)";
+            case WEEK -> timeGroupBy = "DATE_TRUNC('week', wl.created_at)";
+            case SHIFT -> timeGroupBy = "DATE(wl.created_at), COALESCE(sh.code, 'NO_SHIFT')";
+            default -> throw new IllegalArgumentException("Unsupported interval: " + request.getInterval());
+        }
+
+        String joinShift = isShift ? "LEFT JOIN shifts sh ON wl.shift_id = sh.id" : "";
+
+        String groupBy = isShift
+                ? "wl.scale_id, s.name, " + timeGroupBy
+                : "wl.scale_id, s.name, " + timeGroupBy;
+
+        return String.format("""
+                SELECT COUNT(*) FROM (
+                    SELECT 1
+                    FROM weighing_logs wl
+                    JOIN scales s ON wl.scale_id = s.id
+                    %s
+                    WHERE wl.scale_id IN (%s)
+                        AND wl.created_at BETWEEN '%s' AND '%s'
+                    GROUP BY %s
+                ) as subquery
+                """,
+                joinShift,
+                scaleFilter,
+                start,
+                end,
+                groupBy
+        );
+    }
+
+    /**
+     * Build interval query with pagination support
+     */
+    private String buildIntervalQueryWithPagination(
+            IntervalReportRequestDto request,
+            Map<String, IntervalReportRequestDto.AggregationMethod> methods,
+            Map<String, Set<Long>> cumulativeScaleIdsByField,
+            int page,
+            int size
+    ) {
+        String baseQuery = buildIntervalQuery(request, methods, cumulativeScaleIdsByField);
+        int offset = page * size;
+        return baseQuery + String.format(" LIMIT %d OFFSET %d", size, offset);
     }
 
     private List<IntervalReportResponseDto.Row> mapIntervalRows(

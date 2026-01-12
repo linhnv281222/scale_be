@@ -76,6 +76,16 @@ public class IntervalReportRequestDto {
      */
     private Map<String, AggregationMethod> aggregationByField;
 
+    /**
+     * Page number for pagination (0-based). Default: 0.
+     */
+    private Integer page;
+
+    /**
+     * Page size for pagination. Default: 20. Max: 1000.
+     */
+    private Integer size;
+
     public enum TimeInterval {
         SHIFT,
         HOUR,
