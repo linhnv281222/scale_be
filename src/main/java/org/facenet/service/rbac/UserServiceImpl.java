@@ -4,18 +4,25 @@ import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.AlreadyExistsException;
 import org.facenet.common.exception.ResourceNotFoundException;
 import org.facenet.common.exception.ValidationException;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.rbac.UserDto;
 import org.facenet.entity.rbac.Role;
 import org.facenet.entity.rbac.User;
 import org.facenet.mapper.RbacMapper;
 import org.facenet.repository.rbac.RoleRepository;
 import org.facenet.repository.rbac.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,6 +37,25 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Override
+    public PageResponseDto<UserDto.Response> getAllUsers(PageRequestDto pageRequest, Map<String, String> filters) {
+        GenericSpecification<User> spec = new GenericSpecification<>();
+        Specification<User> specification = spec.buildSpecification(filters);
+        
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            Specification<User> searchSpec = spec.buildSearchSpecification(
+                pageRequest.getSearch(), "username", "fullName"
+            );
+            specification = specification.and(searchSpec);
+        }
+        
+        PageRequest springPageRequest = pageRequest.toPageRequest();
+        Page<User> page = userRepository.findAll(specification, springPageRequest);
+        Page<UserDto.Response> responsePage = page.map(RbacMapper::toResponseDto);
+        
+        return PageResponseDto.from(responsePage);
+    }
 
     @Override
     public List<UserDto.Response> getAllUsers() {

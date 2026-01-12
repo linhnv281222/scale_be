@@ -1,9 +1,12 @@
 package org.facenet.service.rbac;
 
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.rbac.RoleDto;
 import org.facenet.entity.rbac.Role;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service interface for Role operations
@@ -11,7 +14,12 @@ import java.util.List;
 public interface RoleService {
 
     /**
-     * Get all roles
+     * Get all roles with pagination and filters
+     */
+    PageResponseDto<RoleDto.Response> getAllRoles(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all roles (non-paginated)
      */
     List<RoleDto.Response> getAllRoles();
 

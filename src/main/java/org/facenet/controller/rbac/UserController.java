@@ -2,6 +2,8 @@ package org.facenet.controller.rbac;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.response.ErrorResponse;
 import org.facenet.dto.rbac.UserDto;
 import org.facenet.service.rbac.UserService;
@@ -20,9 +22,55 @@ public class UserController {
 
     private final UserService userService;
 
+    /**
+     * Get all users with pagination and filters
+     * Supports filters: status, isActive
+     * Examples:
+     * - /users?page=0&size=10
+     * - /users?status=1&page=0&size=10
+     * - /users?search=john&page=0&size=10
+     */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGE')")
-    public ResponseEntity<org.facenet.common.response.ApiResponse<List<UserDto.Response>>> getAllUsers() {
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<org.facenet.common.response.ApiResponse<?>> getAllUsers(
+            @RequestParam(value = "page", defaultValue = "0") Integer page,
+            @RequestParam(value = "size", defaultValue = "10") Integer size,
+            @RequestParam(value = "sort", required = false) String sort,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "status", required = false) Short status,
+            @RequestParam(value = "isActive", required = false) Boolean isActive,
+            @RequestParam(required = false) Map<String, String> allParams) {
+        
+        Map<String, String> filters = new java.util.HashMap<>(allParams);
+        filters.remove("page");
+        filters.remove("size");
+        filters.remove("sort");
+        filters.remove("search");
+        
+        if (status != null) {
+            filters.put("status", status.toString());
+        }
+        if (isActive != null) {
+            filters.put("isActive", isActive.toString());
+        }
+        
+        PageRequestDto pageRequest = PageRequestDto.builder()
+            .page(page)
+            .size(size)
+            .sort(sort)
+            .search(search)
+            .build();
+        
+        PageResponseDto<UserDto.Response> users = userService.getAllUsers(pageRequest, filters);
+        return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(users));
+    }
+
+    /**
+     * Get all users without pagination
+     */
+    @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<org.facenet.common.response.ApiResponse<List<UserDto.Response>>> getAllUsersList() {
         List<UserDto.Response> users = userService.getAllUsers();
         return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(users));
     }

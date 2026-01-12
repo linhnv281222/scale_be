@@ -1,8 +1,11 @@
 package org.facenet.service.rbac;
 
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.rbac.UserDto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service interface for User operations
@@ -10,7 +13,12 @@ import java.util.List;
 public interface UserService {
 
     /**
-     * Get all users with roles and permissions
+     * Get all users with pagination and filters
+     */
+    PageResponseDto<UserDto.Response> getAllUsers(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all users with roles and permissions (non-paginated)
      */
     List<UserDto.Response> getAllUsers();
 

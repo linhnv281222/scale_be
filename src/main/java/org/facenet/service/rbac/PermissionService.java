@@ -1,8 +1,11 @@
 package org.facenet.service.rbac;
 
+import org.facenet.common.pagination.PageRequestDto;
+import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.rbac.PermissionDto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service interface for Permission operations
@@ -10,7 +13,12 @@ import java.util.List;
 public interface PermissionService {
 
     /**
-     * Get all permissions
+     * Get all permissions with pagination and filters
+     */
+    PageResponseDto<PermissionDto.Response> getAllPermissions(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all permissions (non-paginated)
      */
     List<PermissionDto.Response> getAllPermissions();
 
