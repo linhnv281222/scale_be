@@ -52,6 +52,15 @@ public class OrganizationSettingsDto {
         @Schema(description = "Whether logo is available")
         private Boolean hasLogo;
 
+        @Schema(description = "Favicon resource path (relative to classpath)")
+        private String faviconUrl;
+
+        @Schema(description = "Favicon as Base64 string for UI rendering")
+        private String faviconBase64;
+
+        @Schema(description = "Whether favicon is available")
+        private Boolean hasFavicon;
+
         @Schema(description = "Watermark text for reports")
         private String watermarkText;
 

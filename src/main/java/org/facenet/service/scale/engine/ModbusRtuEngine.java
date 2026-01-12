@@ -65,10 +65,16 @@ public class ModbusRtuEngine implements ScaleEngine {
             Integer dataBits = getConnParamAsInt("data_bits"); // VD: 8
             Integer stopBits = getConnParamAsInt("stop_bits"); // VD: 1
             String parity = getConnParamAsString("parity"); // "none", "even", "odd"
+            Integer deviceId = getConnParamAsInt("id"); // Lấy ID từ connection_params
             
             if (comPort == null || baudRate == null) {
                 log.error("[Engine {}] Missing COM port or baud rate in config", config.getScaleId());
                 return;
+            }
+            
+            // Log thông tin ID nếu có
+            if (deviceId != null) {
+                log.info("[Engine {}] Device ID from connection_params: {}", config.getScaleId(), deviceId);
             }
             
             // 2. Thiết lập Serial Parameters
@@ -83,7 +89,11 @@ public class ModbusRtuEngine implements ScaleEngine {
             Modbus.setAutoIncrementTransactionId(true);
             master.setResponseTimeout(1000); // Timeout 1 giây (RTU thường nhanh hơn TCP)
             
-            log.info("[Engine {}] Connecting to {}...", config.getScaleId(), comPort);
+            if (deviceId != null) {
+                log.info("[Engine {}] Connecting to {} with Device ID: {}...", config.getScaleId(), comPort, deviceId);
+            } else {
+                log.info("[Engine {}] Connecting to {}...", config.getScaleId(), comPort);
+            }
             
             // 4. Vòng lặp đọc dữ liệu
             while (!stopped) {
@@ -91,7 +101,11 @@ public class ModbusRtuEngine implements ScaleEngine {
                     // Kết nối nếu chưa connected
                     if (!master.isConnected()) {
                         master.connect();
-                        log.info("[Engine {}] Connected to {}", config.getScaleId(), comPort);
+                        if (deviceId != null) {
+                            log.info("[Engine {}] Connected to {} (Device ID: {})", config.getScaleId(), comPort, deviceId);
+                        } else {
+                            log.info("[Engine {}] Connected to {}", config.getScaleId(), comPort);
+                        }
                     }
                     
                     // Tạo MeasurementEvent

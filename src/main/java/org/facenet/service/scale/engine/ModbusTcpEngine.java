@@ -59,10 +59,16 @@ public class ModbusTcpEngine implements ScaleEngine {
             // 1. Lấy thông tin kết nối từ config
             String ip = getConnParamAsString("ip");
             Integer port = getConnParamAsInt("port");
+            Integer deviceId = getConnParamAsInt("id"); // Lấy ID từ connection_params
             
             if (ip == null || port == null) {
                 log.error("[Engine {}] Missing IP or Port in config", config.getScaleId());
                 return;
+            }
+            
+            // Log thông tin ID nếu có
+            if (deviceId != null) {
+                log.info("[Engine {}] Device ID from connection_params: {}", config.getScaleId(), deviceId);
             }
             
             // 2. Thiết lập TCP Parameters
@@ -75,7 +81,11 @@ public class ModbusTcpEngine implements ScaleEngine {
             Modbus.setAutoIncrementTransactionId(true);
             master.setResponseTimeout(2000); // Timeout 2 giây
             
-            log.info("[Engine {}] Connecting to {}:{}...", config.getScaleId(), ip, port);
+            if (deviceId != null) {
+                log.info("[Engine {}] Connecting to {}:{} with Device ID: {}...", config.getScaleId(), ip, port, deviceId);
+            } else {
+                log.info("[Engine {}] Connecting to {}:{}...", config.getScaleId(), ip, port);
+            }
             
             // 4. Vòng lặp đọc dữ liệu
             while (!stopped) {
@@ -83,7 +93,11 @@ public class ModbusTcpEngine implements ScaleEngine {
                     // Kết nối nếu chưa connected
                     if (!master.isConnected()) {
                         master.connect();
-                        log.info("[Engine {}] Connected to {}:{}", config.getScaleId(), ip, port);
+                        if (deviceId != null) {
+                            log.info("[Engine {}] Connected to {}:{} (Device ID: {})", config.getScaleId(), ip, port, deviceId);
+                        } else {
+                            log.info("[Engine {}] Connected to {}:{}", config.getScaleId(), ip, port);
+                        }
                     }
                     
                     // Tạo MeasurementEvent

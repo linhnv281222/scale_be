@@ -60,10 +60,16 @@ public class SbusEngine implements ScaleEngine {
         try {
             String comPort = getConnParamAsString("com_port");
             Integer baudRate = getConnParamAsInt("baud_rate");
+            Integer connectionId = getConnParamAsInt("id"); // Lấy ID từ connection_params
             
             if (comPort == null || baudRate == null) {
                 log.error("[Engine {}] Missing COM port or baud rate", config.getScaleId());
                 return;
+            }
+            
+            // Log thông tin ID nếu có
+            if (connectionId != null) {
+                log.info("[Engine {}] Connection ID from connection_params: {}", config.getScaleId(), connectionId);
             }
             
             serialPort = SerialPort.getCommPort(comPort);
@@ -78,7 +84,11 @@ public class SbusEngine implements ScaleEngine {
                 return;
             }
             
-            log.info("[Engine {}] Connected to {}", config.getScaleId(), comPort);
+            if (connectionId != null) {
+                log.info("[Engine {}] Connected to {} (Connection ID: {})", config.getScaleId(), comPort, connectionId);
+            } else {
+                log.info("[Engine {}] Connected to {}", config.getScaleId(), comPort);
+            }
             
             Integer deviceId = getConnParamAsInt("device_id");
             if (deviceId == null) deviceId = 1;

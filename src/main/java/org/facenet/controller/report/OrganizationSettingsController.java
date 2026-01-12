@@ -45,7 +45,7 @@ public class OrganizationSettingsController {
     @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     @Operation(
         summary = "Create organization settings",
-        description = "Create new organization with company information and optional logo",
+        description = "Create new organization with company information, optional logo and favicon",
         responses = {
             @ApiResponse(
                 responseCode = "200",
@@ -63,7 +63,8 @@ public class OrganizationSettingsController {
             @RequestParam(required = false) String website,
             @RequestParam(required = false) String taxCode,
             @RequestParam(required = false) String watermarkText,
-            @RequestParam(required = false) MultipartFile logo) {
+            @RequestParam(required = false) MultipartFile logo,
+            @RequestParam(required = false) MultipartFile favicon) {
         
         OrganizationSettingsDto.CreateRequest request = OrganizationSettingsDto.CreateRequest.builder()
                 .companyName(companyName)
@@ -76,13 +77,13 @@ public class OrganizationSettingsController {
                 .watermarkText(watermarkText)
                 .build();
         
-        return ResponseEntity.ok(organizationSettingsService.createSettings(request, logo));
+        return ResponseEntity.ok(organizationSettingsService.createSettings(request, logo, favicon));
     }
 
     @PutMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_JSON_VALUE})
     @Operation(
         summary = "Update organization settings",
-        description = "Update organization information. Can update text fields via form data or upload logo. All fields are optional.",
+        description = "Update organization information. Can update text fields via form data or upload logo/favicon. All fields are optional.",
         responses = {
             @ApiResponse(
                 responseCode = "200",
@@ -101,7 +102,9 @@ public class OrganizationSettingsController {
             @RequestParam(required = false) String taxCode,
             @RequestParam(required = false) String watermarkText,
             @RequestParam(required = false) MultipartFile logo,
-            @RequestParam(required = false) Boolean deleteLogo) {
+            @RequestParam(required = false) Boolean deleteLogo,
+            @RequestParam(required = false) MultipartFile favicon,
+            @RequestParam(required = false) Boolean deleteFavicon) {
         
         OrganizationSettingsDto.UpdateRequest request = OrganizationSettingsDto.UpdateRequest.builder()
                 .companyName(companyName)
@@ -114,6 +117,6 @@ public class OrganizationSettingsController {
                 .watermarkText(watermarkText)
                 .build();
         
-        return ResponseEntity.ok(organizationSettingsService.updateActiveSettings(request, logo, deleteLogo));
+        return ResponseEntity.ok(organizationSettingsService.updateActiveSettings(request, logo, deleteLogo, favicon, deleteFavicon));
     }
 }

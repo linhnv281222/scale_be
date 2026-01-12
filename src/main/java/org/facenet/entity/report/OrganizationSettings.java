@@ -55,6 +55,13 @@ public class OrganizationSettings extends Auditable {
     @Lob
     private byte[] logoData;
 
+    @Column(name = "favicon_url", columnDefinition = "TEXT")
+    private String faviconUrl;
+
+    @Column(name = "favicon_data")
+    @Lob
+    private byte[] faviconData;
+
     @Column(name = "watermark_text", length = 100)
     private String watermarkText;
 

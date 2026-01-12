@@ -31,6 +31,7 @@ public class OrganizationSettingsService {
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("png", "jpg", "jpeg");
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final String LOGO_DIRECTORY = "src/main/resources/images/logos/";
+    private static final String FAVICON_DIRECTORY = "src/main/resources/images/favicons/";
 
     @Transactional(readOnly = true)
     public OrganizationSettingsDto.Response getActiveSettings() {
@@ -42,7 +43,8 @@ public class OrganizationSettingsService {
     @Transactional
     public OrganizationSettingsDto.Response createSettings(
             OrganizationSettingsDto.CreateRequest request,
-            MultipartFile logoFile) {
+            MultipartFile logoFile,
+            MultipartFile faviconFile) {
         
         if (request.getCompanyName() == null || request.getCompanyName().trim().isEmpty()) {
             throw new IllegalArgumentException("Company name is required");
@@ -74,6 +76,12 @@ public class OrganizationSettingsService {
             settings = repository.save(settings);
         }
         
+        // Upload favicon if provided
+        if (faviconFile != null && !faviconFile.isEmpty()) {
+            uploadFaviconFile(settings, faviconFile);
+            settings = repository.save(settings);
+        }
+        
         log.info("Created organization settings: {}", settings.getId());
         
         return toResponse(settings);
@@ -98,7 +106,9 @@ public class OrganizationSettingsService {
     public OrganizationSettingsDto.Response updateActiveSettings(
             OrganizationSettingsDto.UpdateRequest request, 
             MultipartFile logoFile,
-            Boolean deleteLogo) {
+            Boolean deleteLogo,
+            MultipartFile faviconFile,
+            Boolean deleteFavicon) {
         
         OrganizationSettings settings = repository.findActiveDefault()
                 .orElseThrow(() -> new RuntimeException("No active organization settings found"));
@@ -118,8 +128,20 @@ public class OrganizationSettingsService {
             uploadLogoFile(settings, logoFile);
         }
         
+        // Handle favicon deletion
+        if (Boolean.TRUE.equals(deleteFavicon)) {
+            deleteFaviconFiles(settings);
+            settings.setFaviconUrl(null);
+            settings.setFaviconData(null);
+        }
+        
+        // Handle favicon upload
+        if (faviconFile != null && !faviconFile.isEmpty()) {
+            uploadFaviconFile(settings, faviconFile);
+        }
+        
         settings = repository.save(settings);
-        log.info("Updated organization settings with logo handling: {}", settings.getId());
+        log.info("Updated organization settings with logo/favicon handling: {}", settings.getId());
         
         return toResponse(settings);
     }
@@ -239,8 +261,28 @@ public class OrganizationSettingsService {
         return uploadLogoToSettings(settings, file);
     }
 
+    @Transactional
+    public OrganizationSettingsDto.Response uploadFaviconToActive(MultipartFile file) {
+        OrganizationSettings settings = repository.findActiveDefault()
+                .orElseThrow(() -> new RuntimeException("No active organization settings found"));
+        return uploadFaviconToSettings(settings, file);
+    }
+
+    @Transactional
+    public OrganizationSettingsDto.Response uploadFavicon(Long id, MultipartFile file) {
+        OrganizationSettings settings = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Organization settings not found: " + id));
+        return uploadFaviconToSettings(settings, file);
+    }
+
     private OrganizationSettingsDto.Response uploadLogoToSettings(OrganizationSettings settings, MultipartFile file) {
         uploadLogoFile(settings, file);
+        settings = repository.save(settings);
+        return toResponse(settings);
+    }
+
+    private OrganizationSettingsDto.Response uploadFaviconToSettings(OrganizationSettings settings, MultipartFile file) {
+        uploadFaviconFile(settings, file);
         settings = repository.save(settings);
         return toResponse(settings);
     }
@@ -291,6 +333,52 @@ public class OrganizationSettingsService {
         }
     }
 
+    private void uploadFaviconFile(OrganizationSettings settings, MultipartFile file) {
+        // Validate file
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File is empty");
+        }
+
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("File size exceeds maximum allowed size (5MB)");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || originalFilename.isEmpty()) {
+            throw new IllegalArgumentException("Invalid filename");
+        }
+
+        String extension = getFileExtension(originalFilename).toLowerCase();
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("Invalid file type. Allowed: " + String.join(", ", ALLOWED_EXTENSIONS));
+        }
+
+        try {
+            // Generate unique filename
+            String filename = "org-favicon-" + settings.getId() + "-" + UUID.randomUUID().toString() + "." + extension;
+            
+            // Save file to resources
+            Path faviconPath = Paths.get(FAVICON_DIRECTORY);
+            Files.createDirectories(faviconPath);
+            
+            Path filePath = faviconPath.resolve(filename);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            
+            // Update settings with favicon path (relative to classpath)
+            String faviconUrl = "images/favicons/" + filename;
+            settings.setFaviconUrl(faviconUrl);
+            
+            // Also store in database for backup
+            settings.setFaviconData(file.getBytes());
+            
+            log.info("Uploaded favicon for organization {}: {}", settings.getId(), faviconUrl);
+            
+        } catch (IOException e) {
+            log.error("Failed to upload favicon for organization {}", settings.getId(), e);
+            throw new RuntimeException("Failed to upload favicon: " + e.getMessage());
+        }
+    }
+
     @Transactional
     public OrganizationSettingsDto.Response deleteActiveLogo() {
         OrganizationSettings settings = repository.findActiveDefault()
@@ -305,6 +393,20 @@ public class OrganizationSettingsService {
         return deleteLogoFromSettings(settings);
     }
 
+    @Transactional
+    public OrganizationSettingsDto.Response deleteActiveFavicon() {
+        OrganizationSettings settings = repository.findActiveDefault()
+                .orElseThrow(() -> new RuntimeException("No active organization settings found"));
+        return deleteFaviconFromSettings(settings);
+    }
+
+    @Transactional
+    public OrganizationSettingsDto.Response deleteFavicon(Long id) {
+        OrganizationSettings settings = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Organization settings not found: " + id));
+        return deleteFaviconFromSettings(settings);
+    }
+
     private OrganizationSettingsDto.Response deleteLogoFromSettings(OrganizationSettings settings) {
         deleteLogoFiles(settings);
         settings.setLogoUrl(null);
@@ -312,6 +414,16 @@ public class OrganizationSettingsService {
         settings = repository.save(settings);
         
         log.info("Deleted logo for organization: {}", settings.getId());
+        return toResponse(settings);
+    }
+
+    private OrganizationSettingsDto.Response deleteFaviconFromSettings(OrganizationSettings settings) {
+        deleteFaviconFiles(settings);
+        settings.setFaviconUrl(null);
+        settings.setFaviconData(null);
+        settings = repository.save(settings);
+        
+        log.info("Deleted favicon for organization: {}", settings.getId());
         return toResponse(settings);
     }
 
@@ -325,6 +437,20 @@ public class OrganizationSettingsService {
                 log.info("Deleted logo file: {}", filePath);
             } catch (IOException e) {
                 log.warn("Failed to delete logo file: {}", e.getMessage());
+            }
+        }
+    }
+
+    private void deleteFaviconFiles(OrganizationSettings settings) {
+        // Delete file from resources
+        if (settings.getFaviconUrl() != null && !settings.getFaviconUrl().isEmpty()) {
+            try {
+                String filename = settings.getFaviconUrl().substring(settings.getFaviconUrl().lastIndexOf('/') + 1);
+                Path filePath = Paths.get(FAVICON_DIRECTORY, filename);
+                Files.deleteIfExists(filePath);
+                log.info("Deleted favicon file: {}", filePath);
+            } catch (IOException e) {
+                log.warn("Failed to delete favicon file: {}", e.getMessage());
             }
         }
     }
@@ -343,6 +469,20 @@ public class OrganizationSettingsService {
         return getLogoDataFromSettings(settings);
     }
 
+    @Transactional(readOnly = true)
+    public byte[] getActiveFaviconData() {
+        OrganizationSettings settings = repository.findActiveDefault()
+                .orElseThrow(() -> new RuntimeException("No active organization settings found"));
+        return getFaviconDataFromSettings(settings);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] getFaviconData(Long id) {
+        OrganizationSettings settings = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Organization settings not found: " + id));
+        return getFaviconDataFromSettings(settings);
+    }
+
     private byte[] getLogoDataFromSettings(OrganizationSettings settings) {
         // Try database first
         if (settings.getLogoData() != null && settings.getLogoData().length > 0) {
@@ -359,6 +499,28 @@ public class OrganizationSettingsService {
                 }
             } catch (IOException e) {
                 log.error("Failed to read logo file", e);
+            }
+        }
+
+        return null;
+    }
+
+    private byte[] getFaviconDataFromSettings(OrganizationSettings settings) {
+        // Try database first
+        if (settings.getFaviconData() != null && settings.getFaviconData().length > 0) {
+            return settings.getFaviconData();
+        }
+
+        // Try loading from file
+        if (settings.getFaviconUrl() != null && !settings.getFaviconUrl().isEmpty()) {
+            try {
+                String filename = settings.getFaviconUrl().substring(settings.getFaviconUrl().lastIndexOf('/') + 1);
+                Path filePath = Paths.get(FAVICON_DIRECTORY, filename);
+                if (Files.exists(filePath)) {
+                    return Files.readAllBytes(filePath);
+                }
+            } catch (IOException e) {
+                log.error("Failed to read favicon file", e);
             }
         }
 
@@ -391,6 +553,14 @@ public class OrganizationSettingsService {
             logoBase64 = java.util.Base64.getEncoder().encodeToString(logoData);
         }
         
+        // Get favicon data for Base64 encoding
+        byte[] faviconData = getFaviconDataFromSettings(settings);
+        String faviconBase64 = null;
+        
+        if (faviconData != null && faviconData.length > 0) {
+            faviconBase64 = java.util.Base64.getEncoder().encodeToString(faviconData);
+        }
+        
         return OrganizationSettingsDto.Response.builder()
                 .id(settings.getId())
                 .companyName(settings.getCompanyName())
@@ -403,6 +573,9 @@ public class OrganizationSettingsService {
                 .logoUrl(settings.getLogoUrl())
                 .logoBase64(logoBase64)
                 .hasLogo(logoData != null && logoData.length > 0)
+                .faviconUrl(settings.getFaviconUrl())
+                .faviconBase64(faviconBase64)
+                .hasFavicon(faviconData != null && faviconData.length > 0)
                 .watermarkText(settings.getWatermarkText())
                 .isActive(settings.getIsActive())
                 .isDefault(settings.getIsDefault())
