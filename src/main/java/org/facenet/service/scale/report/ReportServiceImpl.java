@@ -5,11 +5,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.scale.IntervalReportRequestDto;
 import org.facenet.dto.scale.IntervalReportResponseDto;
+import org.facenet.dto.scale.IntervalReportRequestDtoV2;
+import org.facenet.dto.scale.IntervalReportResponseDtoV2;
 import org.facenet.dto.scale.ReportRequestDto;
 import org.facenet.dto.scale.ReportResponseDto;
+import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleDailyReport;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleDailyReportRepository;
+import org.facenet.repository.scale.ScaleRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +42,7 @@ public class ReportServiceImpl implements ReportService {
     private final JdbcTemplate jdbcTemplate;
     private final ScaleDailyReportRepository dailyReportRepository;
     private final ScaleConfigRepository scaleConfigRepository;
+    private final ScaleRepository scaleRepository;
 
     private static final String CUMULATIVE_WEIGHT_NAME = "Khối lượng tích lũy";
     private static final String WEIGHT_OUTPUT_NAME = "Khối lượng";
@@ -128,17 +133,413 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
+    @Override
+    public PageResponseDto<IntervalReportResponseDtoV2> generateIntervalReportV2(IntervalReportRequestDtoV2 request) {
+        log.info("[REPORT-V2] Generating interval report V2: interval={}, fromTime={}, toTime={}", 
+                request.getInterval(), request.getFromTime(), request.getToTime());
+
+        // Convert V2 request to V1 request for reusing logic
+        IntervalReportRequestDto v1Request = IntervalReportRequestDto.builder()
+                .scaleIds(request.getScaleIds())
+                .manufacturerIds(request.getManufacturerIds())
+                .locationIds(request.getLocationIds())
+                .direction(request.getDirection())
+                .shiftIds(request.getShiftIds())
+                .fromTime(request.getFromTime())
+                .toTime(request.getToTime())
+                .interval(convertIntervalV2ToV1(request.getInterval()))
+                .aggregationByField(convertAggregationV2ToV1(request.getAggregationByField()))
+                .page(request.getPage())
+                .size(request.getSize())
+                .build();
+
+        // Get V1 results
+        PageResponseDto<IntervalReportResponseDto.Row> v1Response = generateIntervalReport(v1Request);
+
+        // Parse ratio formula (default: data_1/data_3)
+        String ratioFormula = request.getRatioFormula() != null ? request.getRatioFormula() : "data_1/data_3";
+        String[] ratioParts = ratioFormula.split("/");
+        String numeratorField = ratioParts.length > 0 ? ratioParts[0].trim() : "data_1";
+        String denominatorField = ratioParts.length > 1 ? ratioParts[1].trim() : "data_3";
+
+        // Convert V1 rows to V2 rows with additional data
+        List<IntervalReportResponseDtoV2.Row> v2Rows = new ArrayList<>();
+        List<Long> scaleIds = resolveScaleIdsForIntervalReportV2(request);
+        
+        for (IntervalReportResponseDto.Row v1Row : v1Response.getData()) {
+            Long scaleId = v1Row.getScale().getId();
+            
+            // Fetch start and end values
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> startValues = 
+                    fetchStartValues(scaleId, request.getFromTime(), v1Row.getDataValues());
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> endValues = 
+                    fetchEndValues(scaleId, request.getToTime(), v1Row.getDataValues());
+
+            // Convert data values
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> dataValues = 
+                    convertDataValues(v1Row.getDataValues());
+
+            // Calculate ratio
+            IntervalReportResponseDtoV2.RatioValue ratio = calculateRatio(
+                    dataValues, numeratorField, denominatorField, ratioFormula);
+
+            // Convert scale info (includes direction)
+            IntervalReportResponseDtoV2.ScaleInfo scaleInfo = convertScaleInfo(v1Row.getScale());
+            
+            // Build V2 row with direction code
+            IntervalReportResponseDtoV2.Row v2Row = IntervalReportResponseDtoV2.Row.builder()
+                    .scale(scaleInfo)
+                    .period(v1Row.getPeriod())
+                    .recordCount(v1Row.getRecordCount())
+                    .startValues(startValues)
+                    .endValues(endValues)
+                    .dataValues(dataValues)
+                    .ratio(ratio)
+                    .direction(directionToCode(scaleInfo.getDirection()))
+                    .build();
+
+            v2Rows.add(v2Row);
+        }
+
+        // Calculate overview statistics (grouped by direction)
+        Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> overview = 
+                calculateOverview(v2Rows, v1Response.getData());
+
+        // Build response wrapper (not paginated, but contains overview)
+        IntervalReportResponseDtoV2 responseData = IntervalReportResponseDtoV2.builder()
+                .interval(request.getInterval())
+                .fromDate(request.getFromTime().toString())
+                .toDate(request.getToTime().toString())
+                .dataFieldNames(extractDataFieldNames(v1Response.getData()))
+                .aggregationByField(extractAggregationMethods(v1Request))
+                .ratioFormula(ratioFormula)
+                .overview(overview)
+                .rows(v2Rows)
+                .build();
+
+        // Return as paginated response
+        return PageResponseDto.<IntervalReportResponseDtoV2>builder()
+                .data(List.of(responseData))
+                .page(v1Response.getPage())
+                .size(v1Response.getSize())
+                .totalElements(v1Response.getTotalElements())
+                .totalPages(v1Response.getTotalPages())
+                .isFirst(v1Response.getIsFirst())
+                .isLast(v1Response.getIsLast())
+                .hasNext(v1Response.getHasNext())
+                .hasPrevious(v1Response.getHasPrevious())
+                .build();
+    }
+
+    private IntervalReportRequestDto.TimeInterval convertIntervalV2ToV1(IntervalReportRequestDtoV2.TimeInterval interval) {
+        return IntervalReportRequestDto.TimeInterval.valueOf(interval.name());
+    }
+
+    private Map<String, IntervalReportRequestDto.AggregationMethod> convertAggregationV2ToV1(
+            Map<String, IntervalReportRequestDtoV2.AggregationMethod> v2Methods) {
+        if (v2Methods == null) return null;
+        Map<String, IntervalReportRequestDto.AggregationMethod> v1Methods = new HashMap<>();
+        v2Methods.forEach((key, value) -> 
+                v1Methods.put(key, IntervalReportRequestDto.AggregationMethod.valueOf(value.name())));
+        return v1Methods;
+    }
+
+    private List<Long> resolveScaleIdsForIntervalReportV2(IntervalReportRequestDtoV2 request) {
+        List<String> conditions = new ArrayList<>();
+        conditions.add("is_active = true");
+        
+        if (request.getManufacturerIds() != null && !request.getManufacturerIds().isEmpty()) {
+            String ids = request.getManufacturerIds().stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(","));
+            conditions.add("manufacturer_id IN (" + ids + ")");
+        }
+        if (request.getLocationIds() != null && !request.getLocationIds().isEmpty()) {
+            String ids = request.getLocationIds().stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(","));
+            conditions.add("location_id IN (" + ids + ")");
+        }
+        if (request.getDirection() != null && !request.getDirection().isBlank()) {
+            conditions.add("direction = '" + request.getDirection().toUpperCase() + "'");
+        }
+        
+        String whereClause = String.join(" AND ", conditions);
+        String sql = "SELECT id FROM scales WHERE " + whereClause;
+        List<Long> filteredScaleIds = jdbcTemplate.queryForList(sql, Long.class);
+        
+        if (request.getScaleIds() != null && !request.getScaleIds().isEmpty()) {
+            filteredScaleIds.retainAll(request.getScaleIds());
+        }
+        
+        return filteredScaleIds;
+    }
+
+    private Map<String, IntervalReportResponseDtoV2.DataFieldValue> fetchStartValues(
+            Long scaleId, OffsetDateTime fromTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues) {
+        try {
+            String sql = """
+                    SELECT data_1, data_2, data_3, data_4, data_5
+                    FROM weighing_logs
+                    WHERE scale_id = ? AND created_at >= ?
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """;
+            
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, scaleId, fromTime);
+            if (!results.isEmpty()) {
+                Map<String, Object> row = results.get(0);
+                return convertToDataFieldValues(row, defaultValues);
+            }
+        } catch (Exception e) {
+            log.warn("[REPORT-V2] Error fetching start values for scale {}: {}", scaleId, e.getMessage());
+        }
+        return convertToDataFieldValuesFromV1(defaultValues);
+    }
+
+    private Map<String, IntervalReportResponseDtoV2.DataFieldValue> fetchEndValues(
+            Long scaleId, OffsetDateTime toTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues) {
+        try {
+            String sql = """
+                    SELECT data_1, data_2, data_3, data_4, data_5
+                    FROM weighing_logs
+                    WHERE scale_id = ? AND created_at <= ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """;
+            
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, scaleId, toTime);
+            if (!results.isEmpty()) {
+                Map<String, Object> row = results.get(0);
+                return convertToDataFieldValues(row, defaultValues);
+            }
+        } catch (Exception e) {
+            log.warn("[REPORT-V2] Error fetching end values for scale {}: {}", scaleId, e.getMessage());
+        }
+        return convertToDataFieldValuesFromV1(defaultValues);
+    }
+
+    private Map<String, IntervalReportResponseDtoV2.DataFieldValue> convertToDataFieldValues(
+            Map<String, Object> row, Map<String, IntervalReportResponseDto.DataFieldValue> metaValues) {
+        Map<String, IntervalReportResponseDtoV2.DataFieldValue> result = new HashMap<>();
+        for (int i = 1; i <= 5; i++) {
+            String key = "data_" + i;
+            String value = (String) row.get(key);
+            IntervalReportResponseDto.DataFieldValue meta = metaValues.get(key);
+            
+            result.put(key, IntervalReportResponseDtoV2.DataFieldValue.builder()
+                    .value(value != null ? value : "0")
+                    .name(meta != null ? meta.getName() : "Data " + i)
+                    .used(meta != null && meta.isUsed())
+                    .build());
+        }
+        return result;
+    }
+
+    private Map<String, IntervalReportResponseDtoV2.DataFieldValue> convertToDataFieldValuesFromV1(
+            Map<String, IntervalReportResponseDto.DataFieldValue> v1Values) {
+        Map<String, IntervalReportResponseDtoV2.DataFieldValue> result = new HashMap<>();
+        v1Values.forEach((key, v1Value) -> 
+                result.put(key, IntervalReportResponseDtoV2.DataFieldValue.builder()
+                        .value(v1Value.getValue())
+                        .name(v1Value.getName())
+                        .used(v1Value.isUsed())
+                        .build()));
+        return result;
+    }
+
+    private Map<String, IntervalReportResponseDtoV2.DataFieldValue> convertDataValues(
+            Map<String, IntervalReportResponseDto.DataFieldValue> v1Values) {
+        return convertToDataFieldValuesFromV1(v1Values);
+    }
+
+    private IntervalReportResponseDtoV2.RatioValue calculateRatio(
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> dataValues,
+            String numeratorField, String denominatorField, String formula) {
+        try {
+            IntervalReportResponseDtoV2.DataFieldValue numerator = dataValues.get(numeratorField);
+            IntervalReportResponseDtoV2.DataFieldValue denominator = dataValues.get(denominatorField);
+            
+            if (numerator != null && denominator != null) {
+                double numValue = Double.parseDouble(numerator.getValue());
+                double denValue = Double.parseDouble(denominator.getValue());
+                
+                if (denValue != 0) {
+                    double ratio = numValue / denValue;
+                    return IntervalReportResponseDtoV2.RatioValue.builder()
+                            .value(String.format("%.4f", ratio))
+                            .formula(formula)
+                            .build();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[REPORT-V2] Error calculating ratio: {}", e.getMessage());
+        }
+        
+        return IntervalReportResponseDtoV2.RatioValue.builder()
+                .value("0")
+                .formula(formula)
+                .build();
+    }
+
+    private IntervalReportResponseDtoV2.ScaleInfo convertScaleInfo(IntervalReportResponseDto.ScaleInfo v1Scale) {
+        // Fetch direction from Scale entity
+        String direction = null;
+        if (v1Scale.getId() != null) {
+            Scale scale = scaleRepository.findById(v1Scale.getId()).orElse(null);
+            if (scale != null && scale.getDirection() != null) {
+                direction = scale.getDirection().name();
+            }
+        }
+        
+        return IntervalReportResponseDtoV2.ScaleInfo.builder()
+                .id(v1Scale.getId())
+                .name(v1Scale.getName())
+                .model(v1Scale.getModel())
+                .type(v1Scale.getType())
+                .isActive(v1Scale.getIsActive())
+                .location(convertLocationInfo(v1Scale.getLocation()))
+                .createdAt(v1Scale.getCreatedAt())
+                .createdBy(v1Scale.getCreatedBy())
+                .updatedAt(v1Scale.getUpdatedAt())
+                .updatedBy(v1Scale.getUpdatedBy())
+                .direction(direction)
+                .build();
+    }
+
+    private IntervalReportResponseDtoV2.LocationInfo convertLocationInfo(IntervalReportResponseDto.LocationInfo v1Location) {
+        if (v1Location == null) return null;
+        return IntervalReportResponseDtoV2.LocationInfo.builder()
+                .id(v1Location.getId())
+                .code(v1Location.getCode())
+                .name(v1Location.getName())
+                .description(v1Location.getDescription())
+                .parentId(v1Location.getParentId())
+                .build();
+    }
+
+    private Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> calculateOverview(
+            List<IntervalReportResponseDtoV2.Row> v2Rows, List<IntervalReportResponseDto.Row> v1Rows) {
+        Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> overview = new HashMap<>();
+        
+        if (v2Rows.isEmpty()) return overview;
+        
+        // Group rows by direction
+        Map<Integer, List<IntervalReportResponseDtoV2.Row>> rowsByDirection = v2Rows.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        row -> row.getDirection() != null ? row.getDirection() : 0
+                ));
+        
+        // Calculate statistics for each direction
+        for (Map.Entry<Integer, List<IntervalReportResponseDtoV2.Row>> entry : rowsByDirection.entrySet()) {
+            Integer directionCode = entry.getKey();
+            List<IntervalReportResponseDtoV2.Row> directionRows = entry.getValue();
+            String directionKey = String.valueOf(directionCode);
+            
+            Map<String, IntervalReportResponseDtoV2.OverviewStats> fieldStats = new HashMap<>();
+            
+            // Get sample row for metadata
+            if (!directionRows.isEmpty()) {
+                IntervalReportResponseDtoV2.Row sampleRow = directionRows.get(0);
+                
+                for (int i = 1; i <= 5; i++) {
+                    String dataKey = "data_" + i;
+                    IntervalReportResponseDtoV2.DataFieldValue sampleField = sampleRow.getDataValues().get(dataKey);
+                    
+                    if (sampleField != null && sampleField.isUsed()) {
+                        double overallValue = 0;
+                        int count = 0;
+                        
+                        for (IntervalReportResponseDtoV2.Row row : directionRows) {
+                            IntervalReportResponseDtoV2.DataFieldValue field = row.getDataValues().get(dataKey);
+                            if (field != null) {
+                                try {
+                                    overallValue += Double.parseDouble(field.getValue());
+                                    count++;
+                                } catch (NumberFormatException e) {
+                                    // Skip non-numeric values
+                                }
+                            }
+                        }
+                        
+                        // data_1 uses SUM, others use AVG
+                        String aggregation;
+                        String value;
+                        if (i == 1) {
+                            aggregation = "SUM";
+                            value = String.format("%.2f", overallValue);
+                        } else {
+                            aggregation = "AVG";
+                            value = count > 0 ? String.format("%.2f", overallValue / count) : "0";
+                        }
+                        
+                        fieldStats.put(dataKey, IntervalReportResponseDtoV2.OverviewStats.builder()
+                                .value(value)
+                                .aggregation(aggregation)
+                                .name(sampleField.getName())
+                                .used(true)
+                                .build());
+                    }
+                }
+            }
+            
+            overview.put(directionKey, fieldStats);
+        }
+        
+        return overview;
+    }
+    
+    /**
+     * Convert direction string to integer code
+     * @param direction Direction string (IMPORT/EXPORT) or null
+     * @return 0 for unknown/null, 1 for IMPORT, 2 for EXPORT
+     */
+    private Integer directionToCode(String direction) {
+        if (direction == null || direction.isBlank()) {
+            return 0;
+        }
+        return switch (direction.toUpperCase()) {
+            case "IMPORT" -> 1;
+            case "EXPORT" -> 2;
+            default -> 0;
+        };
+    }
+
+    private Map<String, String> extractDataFieldNames(List<IntervalReportResponseDto.Row> rows) {
+        if (rows.isEmpty()) return new HashMap<>();
+        
+        Map<String, String> names = new HashMap<>();
+        IntervalReportResponseDto.Row sampleRow = rows.get(0);
+        sampleRow.getDataValues().forEach((key, value) -> names.put(key, value.getName()));
+        return names;
+    }
+
+    private Map<String, String> extractAggregationMethods(IntervalReportRequestDto request) {
+        Map<String, String> methods = new HashMap<>();
+        if (request.getAggregationByField() != null) {
+            request.getAggregationByField().forEach((key, value) -> 
+                    methods.put(key, value.name()));
+        }
+        return methods;
+    }
+
     private List<Long> resolveScaleIdsForIntervalReport(IntervalReportRequestDto request) {
         // Build WHERE conditions
         List<String> conditions = new ArrayList<>();
         conditions.add("is_active = true");
         
         // Add filters if provided
-        if (request.getManufacturerId() != null) {
-            conditions.add("manufacturer_id = " + request.getManufacturerId());
+        if (request.getManufacturerIds() != null && !request.getManufacturerIds().isEmpty()) {
+            String ids = request.getManufacturerIds().stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(","));
+            conditions.add("manufacturer_id IN (" + ids + ")");
         }
-        if (request.getLocationId() != null) {
-            conditions.add("location_id = " + request.getLocationId());
+        if (request.getLocationIds() != null && !request.getLocationIds().isEmpty()) {
+            String ids = request.getLocationIds().stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(","));
+            conditions.add("location_id IN (" + ids + ")");
         }
         if (request.getDirection() != null && !request.getDirection().isBlank()) {
             conditions.add("direction = '" + request.getDirection().toUpperCase() + "'");
@@ -451,6 +852,15 @@ public class ReportServiceImpl implements ReportService {
 
         String joinShift = isShift ? "LEFT JOIN shifts sh ON wl.shift_id = sh.id" : "";
 
+        // Build shift filter if applicable
+        String shiftFilter = "";
+        if (isShift && request.getShiftIds() != null && !request.getShiftIds().isEmpty()) {
+            String shiftIdsStr = request.getShiftIds().stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(","));
+            shiftFilter = " AND wl.shift_id IN (" + shiftIdsStr + ")";
+        }
+
         String groupBy = isShift
                 ? "wl.scale_id, s.name, " + timeGroupBy
                 : "wl.scale_id, s.name, " + timeGroupBy;
@@ -468,7 +878,7 @@ public class ReportServiceImpl implements ReportService {
                 JOIN scales s ON wl.scale_id = s.id
                 %s
                 WHERE wl.scale_id IN (%s)
-                    AND wl.created_at BETWEEN '%s' AND '%s'
+                    AND wl.created_at BETWEEN '%s' AND '%s'%s
                 GROUP BY %s
                 ORDER BY %s
                 """,
@@ -478,6 +888,7 @@ public class ReportServiceImpl implements ReportService {
                 scaleFilter,
                 start,
                 end,
+                shiftFilter,
                 groupBy,
                 orderBy
         );
@@ -597,6 +1008,15 @@ public class ReportServiceImpl implements ReportService {
 
         String joinShift = isShift ? "LEFT JOIN shifts sh ON wl.shift_id = sh.id" : "";
 
+        // Build shift filter if applicable
+        String shiftFilter = "";
+        if (isShift && request.getShiftIds() != null && !request.getShiftIds().isEmpty()) {
+            String shiftIdsStr = request.getShiftIds().stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(","));
+            shiftFilter = " AND wl.shift_id IN (" + shiftIdsStr + ")";
+        }
+
         String groupBy = isShift
                 ? "wl.scale_id, s.name, " + timeGroupBy
                 : "wl.scale_id, s.name, " + timeGroupBy;
@@ -608,7 +1028,7 @@ public class ReportServiceImpl implements ReportService {
                     JOIN scales s ON wl.scale_id = s.id
                     %s
                     WHERE wl.scale_id IN (%s)
-                        AND wl.created_at BETWEEN '%s' AND '%s'
+                        AND wl.created_at BETWEEN '%s' AND '%s'%s
                     GROUP BY %s
                 ) as subquery
                 """,
@@ -616,6 +1036,7 @@ public class ReportServiceImpl implements ReportService {
                 scaleFilter,
                 start,
                 end,
+                shiftFilter,
                 groupBy
         );
     }

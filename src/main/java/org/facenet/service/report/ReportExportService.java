@@ -6,11 +6,16 @@ import com.deepoove.poi.plugin.table.LoopRowTableRenderPolicy;
 import com.lowagie.text.DocumentException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.facenet.common.pagination.PageResponseDto;
+import org.facenet.dto.report.IntervalReportExportRequestV2;
 import org.facenet.dto.report.ReportData;
 import org.facenet.dto.report.ReportExportRequest;
+import org.facenet.dto.scale.IntervalReportRequestDtoV2;
+import org.facenet.dto.scale.IntervalReportResponseDtoV2;
 import org.facenet.entity.report.ReportTemplate;
 import org.facenet.entity.report.TemplateImport;
 import org.facenet.repository.report.TemplateImportRepository;
+import org.facenet.service.scale.report.ReportService;
 import org.facenet.util.TemplateFileUtil;
 import org.springframework.stereotype.Service;
 
@@ -19,10 +24,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -42,6 +50,7 @@ public class ReportExportService {
     private final PdfExportService pdfExportService;
     private final TemplateImportRepository templateImportRepository;
     private final TemplateFileUtil templateFileUtil;
+    private final ReportService intervalReportService;
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -1103,5 +1112,625 @@ public class ReportExportService {
                 : "ALL";
         
         return String.format("%s_%s_%s%s", code, scaleInfo, dateStr, request.getType().getExtension());
+    }
+    
+    /**
+     * Export Interval Report V2 with template
+     * Combines interval/v2 data generation with template-based export
+     */
+    public byte[] exportIntervalReportV2WithTemplate(IntervalReportExportRequestV2 request) 
+            throws IOException, DocumentException {
+        log.info("Exporting Interval Report V2: importId={}, interval={}, fromTime={}, toTime={}", 
+                request.getImportId(), request.getInterval(), request.getFromTime(), request.getToTime());
+
+        // 1. Get template import record
+        TemplateImport templateImport = templateImportRepository.findById(request.getImportId())
+                .orElseThrow(() -> new RuntimeException("Template import not found for importId: " + request.getImportId()));
+
+        log.info("Found template import: id={}, filename={}", 
+                templateImport.getId(), templateImport.getOriginalFilename());
+
+        // 2. Load template file
+        byte[] templateFile = loadTemplateFile(templateImport);
+        
+        // 3. Generate interval report V2 data
+        PageResponseDto<IntervalReportResponseDtoV2.Row> intervalData = generateIntervalReportV2Data(request);
+        
+        log.info("Generated interval data: {} rows", intervalData.getData().size());
+        
+        // 4. Convert interval V2 data to ReportData structure
+        ReportData reportData = convertIntervalV2ToReportData(intervalData, request);
+        
+        log.info("Converted to ReportData: {} rows", reportData.getRows().size());
+        
+        // 5. Determine template type and export
+        String filename = templateImport.getOriginalFilename().toLowerCase();
+        TemplateFileType fileType = detectTemplateFileType(filename);
+        
+        return switch (fileType) {
+            case WORD -> exportWordTemplate(templateFile, reportData);
+            case PDF_HTML -> exportPdfTemplate(templateFile, reportData);
+            case EXCEL -> exportExcelTemplate(templateFile, reportData, templateImport.getTemplate());
+            default -> throw new RuntimeException("Unsupported template file type: " + filename);
+        };
+    }
+    
+    /**
+     * Load template file from TemplateImport record
+     */
+    private byte[] loadTemplateFile(TemplateImport templateImport) throws IOException {
+        try {
+            byte[] templateFile = templateFileUtil.readTemplateFile(templateImport.getResourcePath());
+            log.info("Loaded template file: {} ({} bytes)", 
+                    templateImport.getOriginalFilename(), templateFile.length);
+            return templateFile;
+        } catch (IOException e) {
+            log.error("Failed to load from resourcePath: {}, trying filePath: {}", 
+                    templateImport.getResourcePath(), templateImport.getFilePath());
+            
+            java.nio.file.Path absolutePath = java.nio.file.Paths.get(templateImport.getFilePath());
+            if (java.nio.file.Files.exists(absolutePath)) {
+                return java.nio.file.Files.readAllBytes(absolutePath);
+            }
+            
+            throw new RuntimeException("Template file not found: " + templateImport.getOriginalFilename());
+        }
+    }
+    
+    /**
+     * Generate interval report V2 data using ReportService
+     */
+    private PageResponseDto<IntervalReportResponseDtoV2.Row> generateIntervalReportV2Data(
+            IntervalReportExportRequestV2 request) {
+        
+        // Convert export request to interval request
+        IntervalReportRequestDtoV2 intervalRequest = IntervalReportRequestDtoV2.builder()
+                .scaleIds(request.getScaleIds())
+                .manufacturerIds(request.getManufacturerIds())
+                .locationIds(request.getLocationIds())
+                .direction(request.getDirection())
+                .shiftIds(request.getShiftIds())
+                .fromTime(request.getFromTime())
+                .toTime(request.getToTime())
+                .interval(request.getInterval())
+                .aggregationByField(request.getAggregationByField())
+                .ratioFormula(request.getRatioFormula())
+                .page(0)
+                .size(10000) // Get all data for export
+                .build();
+        
+        // Generate report using interval service
+        PageResponseDto<IntervalReportResponseDtoV2> result = intervalReportService.generateIntervalReportV2(intervalRequest);
+        
+        // Extract rows from nested structure
+        if (result.getData().isEmpty()) {
+            return PageResponseDto.<IntervalReportResponseDtoV2.Row>builder()
+                    .data(List.of())
+                    .page(0)
+                    .size(0)
+                    .totalElements(0L)
+                    .totalPages(0)
+                    .isFirst(true)
+                    .isLast(true)
+                    .hasNext(false)
+                    .hasPrevious(false)
+                    .build();
+        }
+        
+        IntervalReportResponseDtoV2 reportData = result.getData().get(0);
+        
+        return PageResponseDto.<IntervalReportResponseDtoV2.Row>builder()
+                .data(reportData.getRows())
+                .page(0)
+                .size(reportData.getRows().size())
+                .totalElements((long) reportData.getRows().size())
+                .totalPages(1)
+                .isFirst(true)
+                .isLast(true)
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
+    }
+    
+    /**
+     * Convert Interval Report V2 data to ReportData structure
+     * Transforms direction-based overview and enhanced row data into template-ready format
+     */
+    private ReportData convertIntervalV2ToReportData(
+            PageResponseDto<IntervalReportResponseDtoV2.Row> intervalData,
+            IntervalReportExportRequestV2 request) {
+        
+        // Get full interval report for overview data
+        IntervalReportRequestDtoV2 intervalRequest = IntervalReportRequestDtoV2.builder()
+                .scaleIds(request.getScaleIds())
+                .manufacturerIds(request.getManufacturerIds())
+                .locationIds(request.getLocationIds())
+                .direction(request.getDirection())
+                .fromTime(request.getFromTime())
+                .toTime(request.getToTime())
+                .interval(request.getInterval())
+                .aggregationByField(request.getAggregationByField())
+                .ratioFormula(request.getRatioFormula())
+                .page(0)
+                .size(1000000000)
+                .build();
+        
+        PageResponseDto<IntervalReportResponseDtoV2> fullReport = intervalReportService.generateIntervalReportV2(intervalRequest);
+        IntervalReportResponseDtoV2 reportData = fullReport.getData().isEmpty() ? null : fullReport.getData().get(0);
+        
+        // Get data field names from first row
+        String data1Name = "Data 1";
+        String data2Name = "Data 2";
+        String data3Name = "Data 3";
+        String data4Name = "Data 4";
+        String data5Name = "Data 5";
+        
+        if (!intervalData.getData().isEmpty()) {
+            IntervalReportResponseDtoV2.Row firstRow = intervalData.getData().get(0);
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> dataValues = firstRow.getDataValues();
+            
+            if (dataValues.get("data_1") != null && dataValues.get("data_1").getName() != null) {
+                data1Name = dataValues.get("data_1").getName();
+            }
+            if (dataValues.get("data_2") != null && dataValues.get("data_2").getName() != null) {
+                data2Name = dataValues.get("data_2").getName();
+            }
+            if (dataValues.get("data_3") != null && dataValues.get("data_3").getName() != null) {
+                data3Name = dataValues.get("data_3").getName();
+            }
+            if (dataValues.get("data_4") != null && dataValues.get("data_4").getName() != null) {
+                data4Name = dataValues.get("data_4").getName();
+            }
+            if (dataValues.get("data_5") != null && dataValues.get("data_5").getName() != null) {
+                data5Name = dataValues.get("data_5").getName();
+            }
+        }
+        
+        // Convert rows
+        List<ReportData.ReportRow> reportRows = new java.util.ArrayList<>();
+        int rowNum = 1;
+        
+        for (IntervalReportResponseDtoV2.Row v2Row : intervalData.getData()) {
+            ReportData.ReportRow reportRow = convertV2RowToReportRow(v2Row, rowNum++);
+            reportRows.add(reportRow);
+        }
+        
+        // Calculate summary from overview
+        ReportData.ReportSummary summary = calculateSummaryFromOverview(reportData, reportRows);
+        
+        // Calculate direction-based summaries
+        Map<String, ReportData.DirectionSummary> directionSummariesMap = 
+                calculateDirectionSummaries(reportData, reportRows);
+        
+        return ReportData.builder()
+                .reportTitle("Báo cáo khoảng thời gian V2")
+                .reportCode("INTERVAL_V2")
+                .startTime(request.getFromTime())
+                .endTime(request.getToTime())
+                .exportTime(OffsetDateTime.now())
+                .preparedBy(getCurrentUser())
+                .data1Name(data1Name)
+                .data2Name(data2Name)
+                .data3Name(data3Name)
+                .data4Name(data4Name)
+                .data5Name(data5Name)
+                .rows(reportRows)
+                .summary(summary)
+                .unknownSummaries(directionSummariesMap.get("0"))
+                .importSummaries(directionSummariesMap.get("1"))
+                .exportSummaries(directionSummariesMap.get("2"))
+                .build();
+    }
+    
+    /**
+     * Convert Interval V2 Row to ReportData.ReportRow
+     * Includes start values, end values, and aggregated data values
+     */
+    private ReportData.ReportRow convertV2RowToReportRow(IntervalReportResponseDtoV2.Row v2Row, int rowNumber) {
+        String scaleName = v2Row.getScale() != null ? v2Row.getScale().getName() : "Unknown";
+        Long scaleId = v2Row.getScale() != null ? v2Row.getScale().getId() : null;
+        String location = v2Row.getScale() != null && v2Row.getScale().getLocation() != null 
+                ? v2Row.getScale().getLocation().getName() : "";
+
+        // Get start values (null-safe)
+        Double data1Start = extractDataFieldValue(v2Row.getStartValues(), "data_1");
+        Double data2Start = extractDataFieldValue(v2Row.getStartValues(), "data_2");
+        Double data3Start = extractDataFieldValue(v2Row.getStartValues(), "data_3");
+        Double data4Start = extractDataFieldValue(v2Row.getStartValues(), "data_4");
+        Double data5Start = extractDataFieldValue(v2Row.getStartValues(), "data_5");
+        
+        // Get end values (null-safe)
+        Double data1End = extractDataFieldValue(v2Row.getEndValues(), "data_1");
+        Double data2End = extractDataFieldValue(v2Row.getEndValues(), "data_2");
+        Double data3End = extractDataFieldValue(v2Row.getEndValues(), "data_3");
+        Double data4End = extractDataFieldValue(v2Row.getEndValues(), "data_4");
+        Double data5End = extractDataFieldValue(v2Row.getEndValues(), "data_5");
+        
+        // Get aggregated data values (null-safe)
+        Double data1 = extractDataFieldValue(v2Row.getDataValues(), "data_1");
+        Double data2 = extractDataFieldValue(v2Row.getDataValues(), "data_2");
+        Double data3 = extractDataFieldValue(v2Row.getDataValues(), "data_3");
+        Double data4 = extractDataFieldValue(v2Row.getDataValues(), "data_4");
+        Double data5 = extractDataFieldValue(v2Row.getDataValues(), "data_5");
+        
+        return ReportData.ReportRow.builder()
+                .rowNumber(rowNumber)
+                .scaleId(scaleId)
+                .scaleName(scaleName)
+                .location(location)
+                .period(v2Row.getPeriod())
+                .data1Start(data1Start)
+                .data2Start(data2Start)
+                .data3Start(data3Start)
+                .data4Start(data4Start)
+                .data5Start(data5Start)
+                .data1End(data1End)
+                .data2End(data2End)
+                .data3End(data3End)
+                .data4End(data4End)
+                .data5End(data5End)
+                .data1Total(data1)
+                .data2Total(data2)
+                .data3Total(data3)
+                .data4Total(data4)
+                .data5Total(data5)
+                .recordCount(v2Row.getRecordCount())
+                .direction(v2Row.getDirection())
+                .ratio(v2Row.getRatio() != null && v2Row.getRatio().getValue() != null 
+                        ? parseDouble(v2Row.getRatio().getValue()) : null)
+                .build();
+    }
+    
+    /**
+     * Calculate summary statistics from overview data
+     * Aggregates across all directions (0, 1, 2)
+     */
+    private ReportData.ReportSummary calculateSummaryFromOverview(
+            IntervalReportResponseDtoV2 reportData,
+            List<ReportData.ReportRow> rows) {
+        
+        if (reportData == null || reportData.getOverview() == null) {
+            return calculateSummaryFromRows(rows);
+        }
+        
+        Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> overview = reportData.getOverview();
+        
+        // Aggregate across all directions
+        double data1Total = 0;
+        double data2Total = 0;
+        double data3Total = 0;
+        double data4Total = 0;
+        double data5Total = 0;
+        
+        for (Map.Entry<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> directionEntry : overview.entrySet()) {
+            Map<String, IntervalReportResponseDtoV2.OverviewStats> fieldStats = directionEntry.getValue();
+            
+            if (fieldStats.get("data_1") != null) {
+                data1Total += parseDouble(fieldStats.get("data_1").getValue());
+            }
+            if (fieldStats.get("data_2") != null) {
+                data2Total += parseDouble(fieldStats.get("data_2").getValue());
+            }
+            if (fieldStats.get("data_3") != null) {
+                data3Total += parseDouble(fieldStats.get("data_3").getValue());
+            }
+            if (fieldStats.get("data_4") != null) {
+                data4Total += parseDouble(fieldStats.get("data_4").getValue());
+            }
+            if (fieldStats.get("data_5") != null) {
+                data5Total += parseDouble(fieldStats.get("data_5").getValue());
+            }
+        }
+        
+        int totalRecords = rows.stream()
+                .mapToInt(r -> r.getRecordCount() != null ? r.getRecordCount() : 0)
+                .sum();
+        
+        return ReportData.ReportSummary.builder()
+                .totalScales((int) rows.stream().map(ReportData.ReportRow::getScaleId).distinct().count())
+                .totalRecords(totalRecords)
+                .data1GrandTotal(data1Total)
+                .data2GrandTotal(data2Total)
+                .data3GrandTotal(data3Total)
+                .data4GrandTotal(data4Total)
+                .data5GrandTotal(data5Total)
+                .data1Average(rows.isEmpty() ? 0 : data1Total / rows.size())
+                .data2Average(rows.isEmpty() ? 0 : data2Total / rows.size())
+                .data3Average(rows.isEmpty() ? 0 : data3Total / rows.size())
+                .data4Average(rows.isEmpty() ? 0 : data4Total / rows.size())
+                .data5Average(rows.isEmpty() ? 0 : data5Total / rows.size())
+                .build();
+    }
+    
+    /**
+     * Calculate direction-specific summaries from overview data
+     * Returns Map with keys: "0" (unknown), "1" (nhập), "2" (xuất)
+     */
+    private Map<String, ReportData.DirectionSummary> calculateDirectionSummaries(
+            IntervalReportResponseDtoV2 reportData,
+            List<ReportData.ReportRow> rows) {
+        
+        Map<String, ReportData.DirectionSummary> summaries = new HashMap<>();
+        
+        // Initialize all 3 directions with empty summaries
+        summaries.put("0", createEmptyDirectionSummary(0, "Unknown"));
+        summaries.put("1", createEmptyDirectionSummary(1, "Nhập"));
+        summaries.put("2", createEmptyDirectionSummary(2, "Xuất"));
+        
+        if (reportData == null || reportData.getOverview() == null) {
+            // Fallback: calculate from rows grouped by direction
+            return calculateDirectionSummariesFromRows(rows);
+        }
+        
+        Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> overview = reportData.getOverview();
+        
+        // Process each direction in overview
+        for (Map.Entry<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> directionEntry : overview.entrySet()) {
+            String directionCode = directionEntry.getKey();
+            Map<String, IntervalReportResponseDtoV2.OverviewStats> fieldStats = directionEntry.getValue();
+            
+            // Get direction name
+            String directionName = getDirectionName(directionCode);
+            
+            // Get rows for this direction
+            int dirCode = Integer.parseInt(directionCode);
+            List<ReportData.ReportRow> directionRows = rows.stream()
+                    .filter(r -> r.getDirection() != null && r.getDirection() == dirCode)
+                    .collect(Collectors.toList());
+            
+            // Extract stats from overview (null-safe)
+            double data1Total = extractOverviewValue(fieldStats, "data_1");
+            double data2Total = extractOverviewValue(fieldStats, "data_2");
+            double data3Total = extractOverviewValue(fieldStats, "data_3");
+            double data4Total = extractOverviewValue(fieldStats, "data_4");
+            double data5Total = extractOverviewValue(fieldStats, "data_5");
+            
+            int totalRecords = directionRows.stream()
+                    .mapToInt(r -> r.getRecordCount() != null ? r.getRecordCount() : 0)
+                    .sum();
+            
+            int totalScales = (int) directionRows.stream()
+                    .map(ReportData.ReportRow::getScaleId)
+                    .distinct()
+                    .count();
+            
+            // Use totalRecords for average calculation, not directionRows.size()
+            double data1Avg = totalRecords > 0 ? data1Total / totalRecords : 0;
+            double data2Avg = totalRecords > 0 ? data2Total / totalRecords : 0;
+            double data3Avg = totalRecords > 0 ? data3Total / totalRecords : 0;
+            double data4Avg = totalRecords > 0 ? data4Total / totalRecords : 0;
+            double data5Avg = totalRecords > 0 ? data5Total / totalRecords : 0;
+            
+            ReportData.DirectionSummary summary = ReportData.DirectionSummary.builder()
+                    .directionCode(dirCode)
+                    .directionName(directionName)
+                    .totalScales(totalScales)
+                    .totalRecords(totalRecords)
+                    .data1GrandTotal(data1Total)
+                    .data2GrandTotal(data2Total)
+                    .data3GrandTotal(data3Total)
+                    .data4GrandTotal(data4Total)
+                    .data5GrandTotal(data5Total)
+                    .data1Average(data1Avg)
+                    .data2Average(data2Avg)
+                    .data3Average(data3Avg)
+                    .data4Average(data4Avg)
+                    .data5Average(data5Avg)
+                    .build();
+            
+            summaries.put(directionCode, summary);
+        }
+        
+        return summaries;
+    }
+    
+    /**
+     * Fallback: Calculate direction summaries from rows when overview not available
+     */
+    private Map<String, ReportData.DirectionSummary> calculateDirectionSummariesFromRows(
+            List<ReportData.ReportRow> rows) {
+        
+        Map<String, ReportData.DirectionSummary> summaries = new HashMap<>();
+        
+        // Initialize all 3 directions with empty summaries
+        summaries.put("0", createEmptyDirectionSummary(0, "Unknown"));
+        summaries.put("1", createEmptyDirectionSummary(1, "Nhập"));
+        summaries.put("2", createEmptyDirectionSummary(2, "Xuất"));
+        
+        // Group rows by direction
+        Map<Integer, List<ReportData.ReportRow>> rowsByDirection = rows.stream()
+                .collect(Collectors.groupingBy(
+                        row -> row.getDirection() != null ? row.getDirection() : 0
+                ));
+        
+        // Calculate summary for each direction
+        for (Map.Entry<Integer, List<ReportData.ReportRow>> entry : rowsByDirection.entrySet()) {
+            Integer dirCode = entry.getKey();
+            List<ReportData.ReportRow> dirRows = entry.getValue();
+            
+            double data1Total = dirRows.stream().mapToDouble(r -> r.getData1Total() != null ? r.getData1Total() : 0).sum();
+            double data2Total = dirRows.stream().mapToDouble(r -> r.getData2Total() != null ? r.getData2Total() : 0).sum();
+            double data3Total = dirRows.stream().mapToDouble(r -> r.getData3Total() != null ? r.getData3Total() : 0).sum();
+            double data4Total = dirRows.stream().mapToDouble(r -> r.getData4Total() != null ? r.getData4Total() : 0).sum();
+            double data5Total = dirRows.stream().mapToDouble(r -> r.getData5Total() != null ? r.getData5Total() : 0).sum();
+            
+            int totalRecords = dirRows.stream().mapToInt(r -> r.getRecordCount() != null ? r.getRecordCount() : 0).sum();
+            int totalScales = (int) dirRows.stream().map(ReportData.ReportRow::getScaleId).distinct().count();
+            
+            // Use totalRecords for average calculation, not dirRows.size()
+            double data1Avg = totalRecords > 0 ? data1Total / totalRecords : 0;
+            double data2Avg = totalRecords > 0 ? data2Total / totalRecords : 0;
+            double data3Avg = totalRecords > 0 ? data3Total / totalRecords : 0;
+            double data4Avg = totalRecords > 0 ? data4Total / totalRecords : 0;
+            double data5Avg = totalRecords > 0 ? data5Total / totalRecords : 0;
+            
+            ReportData.DirectionSummary summary = ReportData.DirectionSummary.builder()
+                    .directionCode(dirCode)
+                    .directionName(getDirectionName(String.valueOf(dirCode)))
+                    .totalScales(totalScales)
+                    .totalRecords(totalRecords)
+                    .data1GrandTotal(data1Total)
+                    .data2GrandTotal(data2Total)
+                    .data3GrandTotal(data3Total)
+                    .data4GrandTotal(data4Total)
+                    .data5GrandTotal(data5Total)
+                    .data1Average(data1Avg)
+                    .data2Average(data2Avg)
+                    .data3Average(data3Avg)
+                    .data4Average(data4Avg)
+                    .data5Average(data5Avg)
+                    .build();
+            
+            summaries.put(String.valueOf(dirCode), summary);
+        }
+        
+        return summaries;
+    }
+    
+    /**
+     * Get direction name from code
+     */
+    private String getDirectionName(String directionCode) {
+        return switch (directionCode) {
+            case "0" -> "Unknown";
+            case "1" -> "Nhập";
+            case "2" -> "Xuất";
+            default -> "Unknown";
+        };
+    }
+    
+    /**
+     * Create an empty DirectionSummary for a direction
+     */
+    private ReportData.DirectionSummary createEmptyDirectionSummary(Integer directionCode, String directionName) {
+        return ReportData.DirectionSummary.builder()
+                .directionCode(directionCode)
+                .directionName(directionName)
+                .totalScales(0)
+                .totalRecords(0)
+                .data1GrandTotal(0.0)
+                .data2GrandTotal(0.0)
+                .data3GrandTotal(0.0)
+                .data4GrandTotal(0.0)
+                .data5GrandTotal(0.0)
+                .data1Average(0.0)
+                .data2Average(0.0)
+                .data3Average(0.0)
+                .data4Average(0.0)
+                .data5Average(0.0)
+                .build();
+    }
+    
+    /**
+     * Fallback: Calculate summary directly from rows if overview not available
+     */
+    private ReportData.ReportSummary calculateSummaryFromRows(List<ReportData.ReportRow> rows) {
+        if (rows.isEmpty()) {
+            return ReportData.ReportSummary.builder()
+                    .totalScales(0)
+                    .totalRecords(0)
+                    .build();
+        }
+        
+        double data1Total = rows.stream().mapToDouble(r -> r.getData1Total() != null ? r.getData1Total() : 0).sum();
+        double data2Total = rows.stream().mapToDouble(r -> r.getData2Total() != null ? r.getData2Total() : 0).sum();
+        double data3Total = rows.stream().mapToDouble(r -> r.getData3Total() != null ? r.getData3Total() : 0).sum();
+        double data4Total = rows.stream().mapToDouble(r -> r.getData4Total() != null ? r.getData4Total() : 0).sum();
+        double data5Total = rows.stream().mapToDouble(r -> r.getData5Total() != null ? r.getData5Total() : 0).sum();
+        
+        int totalRecords = rows.stream().mapToInt(r -> r.getRecordCount() != null ? r.getRecordCount() : 0).sum();
+        
+        return ReportData.ReportSummary.builder()
+                .totalScales((int) rows.stream().map(ReportData.ReportRow::getScaleId).distinct().count())
+                .totalRecords(totalRecords)
+                .data1GrandTotal(data1Total)
+                .data2GrandTotal(data2Total)
+                .data3GrandTotal(data3Total)
+                .data4GrandTotal(data4Total)
+                .data5GrandTotal(data5Total)
+                .data1Average(data1Total / rows.size())
+                .data2Average(data2Total / rows.size())
+                .data3Average(data3Total / rows.size())
+                .data4Average(data4Total / rows.size())
+                .data5Average(data5Total / rows.size())
+                .build();
+    }
+    
+    /**
+     * Parse double value from DataFieldValue or string
+     */
+    private Double parseDouble(Object value) {
+        if (value == null) return 0.0;
+        
+        if (value instanceof IntervalReportResponseDtoV2.DataFieldValue) {
+            return parseDouble(((IntervalReportResponseDtoV2.DataFieldValue) value).getValue());
+        }
+        
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
+    }
+    
+    /**
+     * Safely extract double value from DataFieldValue map
+     */
+    private Double extractDataFieldValue(Map<String, IntervalReportResponseDtoV2.DataFieldValue> map, String key) {
+        if (map == null || key == null) return 0.0;
+        IntervalReportResponseDtoV2.DataFieldValue fieldValue = map.get(key);
+        if (fieldValue == null || fieldValue.getValue() == null) return 0.0;
+        return parseDouble(fieldValue.getValue());
+    }
+    
+    /**
+     * Safely extract double value from OverviewStats map
+     */
+    private Double extractOverviewValue(Map<String, IntervalReportResponseDtoV2.OverviewStats> map, String key) {
+        if (map == null || key == null) return 0.0;
+        IntervalReportResponseDtoV2.OverviewStats stats = map.get(key);
+        if (stats == null || stats.getValue() == null) return 0.0;
+        return parseDouble(stats.getValue());
+    }
+    
+    /**
+     * Generate filename for Interval Report V2 export
+     */
+    public String generateFilenameForIntervalV2(IntervalReportExportRequestV2 request) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        String fromDateStr = formatter.format(request.getFromTime());
+        String toDateStr = formatter.format(request.getToTime());
+        
+        String intervalStr = request.getInterval().name();
+        
+        // Determine extension from template
+        TemplateImport templateImport = templateImportRepository.findById(request.getImportId())
+                .orElseThrow(() -> new RuntimeException("Template not found"));
+        
+        String filename = templateImport.getOriginalFilename();
+        String extension = filename.substring(filename.lastIndexOf('.'));
+        
+        return String.format("IntervalReportV2_%s_%s_%s%s", 
+                intervalStr, fromDateStr, toDateStr, extension);
+    }
+    
+    /**
+     * Get current authenticated user
+     */
+    private String getCurrentUser() {
+        try {
+            org.springframework.security.core.Authentication auth = 
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated()) {
+                return auth.getName();
+            }
+        } catch (Exception e) {
+            log.trace("Could not get authenticated user: {}", e.getMessage());
+        }
+        return "System";
     }
 }

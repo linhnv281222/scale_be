@@ -7,6 +7,8 @@ import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.response.ApiResponse;
 import org.facenet.dto.scale.IntervalReportRequestDto;
 import org.facenet.dto.scale.IntervalReportResponseDto;
+import org.facenet.dto.scale.IntervalReportRequestDtoV2;
+import org.facenet.dto.scale.IntervalReportResponseDtoV2;
 import org.facenet.dto.scale.ReportRequestDto;
 import org.facenet.dto.scale.ReportResponseDto;
 import org.facenet.service.scale.report.ReportService;
@@ -62,6 +64,30 @@ public class ScaleReportController {
             log.error("[REPORT-API] Error generating interval report: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Failed to generate interval report: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Generate interval statistics report V2 with start/end values, ratio calculation, and overview.
+     * Simplified request (only fromTime/toTime, no date duplication).
+     * Response includes: start_values, end_values, data_values, ratio, and overview statistics.
+     * Overview: data_1 uses SUM, data_2..data_5 use AVG.
+     * Supports filtering by manufacturer, location, and scale direction.
+     * Supports pagination via page and size parameters.
+     */
+    @PostMapping("/interval/v2")
+    public ResponseEntity<ApiResponse<?>> generateIntervalReportV2(
+            @Valid @RequestBody IntervalReportRequestDtoV2 request) {
+
+        log.info("[REPORT-API-V2] Generating interval report V2: {}", request);
+
+        try {
+            PageResponseDto<IntervalReportResponseDtoV2> report = reportService.generateIntervalReportV2(request);
+            return ResponseEntity.ok(ApiResponse.success(report));
+        } catch (Exception e) {
+            log.error("[REPORT-API-V2] Error generating interval report V2: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Failed to generate interval report V2: " + e.getMessage()));
         }
     }
 

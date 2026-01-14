@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.facenet.common.response.ApiResponse;
+import org.facenet.dto.report.IntervalReportExportRequestV2;
 import org.facenet.dto.report.ReportExportRequest;
 import org.facenet.entity.report.ReportDefinition;
 import org.facenet.entity.report.ReportExecutionHistory;
@@ -99,6 +100,64 @@ public class EnterpriseReportController {
     }
 
     /**
+     * Export Interval Report V2 with template
+     * Combines interval/v2 data generation with template-based export
+     * Supports direction-based overview and enhanced statistics
+     */
+    @PostMapping("/export/v2")
+    public ResponseEntity<byte[]> exportIntervalReportV2(
+            @Valid @RequestBody IntervalReportExportRequestV2 request,
+            HttpServletRequest httpRequest) {
+        
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            log.info("Interval Report V2 export: importId={}, interval={}, fromTime={}, toTime={}, user={}", 
+                    request.getImportId(), request.getInterval(), request.getFromTime(), 
+                    request.getToTime(), getCurrentUser());
+
+            // Validate importId
+            if (request.getImportId() == null) {
+                throw new IllegalArgumentException("importId must not be null");
+            }
+            
+            // Export interval report V2 with template
+            byte[] reportData = reportExportService.exportIntervalReportV2WithTemplate(request);
+            
+            // Generate filename
+            String filename = reportExportService.generateFilenameForIntervalV2(request);
+            
+            long executionTime = System.currentTimeMillis() - startTime;
+            log.info("Interval Report V2 exported successfully: {} bytes, {}ms", 
+                    reportData.length, executionTime);
+            
+            // Determine content type from filename
+            MediaType contentType = determineContentType(filename);
+            
+            // Return file
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .header("X-Import-Id", request.getImportId().toString())
+                    .header("X-Execution-Time-Ms", String.valueOf(executionTime))
+                    .contentType(contentType)
+                    .contentLength(reportData.length)
+                    .body(reportData);
+
+        } catch (IllegalArgumentException e) {
+            log.error("Interval Report V2 validation failed: {}", e.getMessage());
+            throw new RuntimeException("Report validation failed: " + e.getMessage(), e);
+            
+        } catch (IOException | DocumentException e) {
+            log.error("Interval Report V2 export failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate report: " + e.getMessage(), e);
+            
+        } catch (Exception e) {
+            log.error("Unexpected error during Interval Report V2 export", e);
+            throw new RuntimeException("Report export failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Get list of available reports
      */
     @GetMapping("/definitions")
@@ -183,5 +242,22 @@ public class EnterpriseReportController {
             return authentication.getName();
         }
         return "anonymous";
+    }
+    
+    /**
+     * Determine content type from filename extension
+     */
+    private MediaType determineContentType(String filename) {
+        String lowerFilename = filename.toLowerCase();
+        if (lowerFilename.endsWith(".docx")) {
+            return MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        } else if (lowerFilename.endsWith(".pdf")) {
+            return MediaType.APPLICATION_PDF;
+        } else if (lowerFilename.endsWith(".xlsx")) {
+            return MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        } else if (lowerFilename.endsWith(".html")) {
+            return MediaType.TEXT_HTML;
+        }
+        return MediaType.APPLICATION_OCTET_STREAM;
     }
 }

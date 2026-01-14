@@ -6,26 +6,22 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Request DTO for interval statistics report.
- * Supports filtering by scale(s), date range, and grouping by SHIFT/HOUR/DAY/WEEK.
- * Each data_n field can use its own aggregation method; if missing, defaults to ABS.
+ * Request DTO for interval statistics report V2.
+ * Simplified version - uses only one pair of time parameters (fromTime/toTime).
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IntervalReportRequestDto {
+public class IntervalReportRequestDtoV2 {
 
     /**
      * Optional list of scale IDs. If null/empty, report includes all active scales.
-     * Note: If locationIds, manufacturerIds, or direction filters are provided, they will be applied
-     * in addition to scaleIds filter.
      */
     private List<Long> scaleIds;
 
@@ -46,33 +42,24 @@ public class IntervalReportRequestDto {
 
     /**
      * Optional filter by shift IDs (supports multiple).
-     * Only applicable when interval is SHIFT.
      */
     private List<Long> shiftIds;
 
     /**
-     * From date (LocalDate). Use this for simple date-based filtering.
-     * If both fromDate/toDate and fromTime/toTime are provided, fromTime/toTime takes precedence.
-     * At least one pair (fromDate/toDate OR fromTime/toTime) must be provided.
+     * From time (OffsetDateTime) - REQUIRED.
      */
-    private LocalDate fromDate;
-
-    /**
-     * To date (LocalDate). Use this for simple date-based filtering.
-     */
-    private LocalDate toDate;
-
-    /**
-     * From time (OffsetDateTime). Use this for precise time-based filtering with timezone.
-     * If provided along with toTime, this pair takes precedence over fromDate/toDate.
-     */
+    @NotNull(message = "From time is required")
     private OffsetDateTime fromTime;
 
     /**
-     * To time (OffsetDateTime). Use this for precise time-based filtering with timezone.
+     * To time (OffsetDateTime) - REQUIRED.
      */
+    @NotNull(message = "To time is required")
     private OffsetDateTime toTime;
 
+    /**
+     * Time interval for grouping (SHIFT/HOUR/DAY/WEEK) - REQUIRED.
+     */
     @NotNull(message = "Interval is required")
     private TimeInterval interval;
 
@@ -81,6 +68,13 @@ public class IntervalReportRequestDto {
      * Keys: data_1..data_5. Missing/NULL value defaults to ABS.
      */
     private Map<String, AggregationMethod> aggregationByField;
+
+    /**
+     * Ratio calculation configuration.
+     * Format: "data_x/data_y" (e.g., "data_1/data_3").
+     * Default: "data_1/data_3" if not provided.
+     */
+    private String ratioFormula;
 
     /**
      * Page number for pagination (0-based). Default: 0.

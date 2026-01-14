@@ -61,6 +61,15 @@ public class GenericSpecification<T> {
                             predicates.add(criteriaBuilder.lessThanOrEqualTo(
                                 getPath(root, field).as(String.class), value
                             ));
+                        } else if (key.endsWith("_in")) {
+                            // IN operation for lists (e.g., location.id_in=1,2,3)
+                            String field = key.substring(0, key.length() - 3);
+                            String[] values = value.split(",");
+                            List<Object> convertedValues = new ArrayList<>();
+                            for (String val : values) {
+                                convertedValues.add(convertValue(val.trim()));
+                            }
+                            predicates.add(getPath(root, field).in(convertedValues));
                         } else {
                             // Default: equals operation
                             predicates.add(criteriaBuilder.equal(getPath(root, key), convertValue(value)));

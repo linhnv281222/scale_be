@@ -3,6 +3,7 @@ package org.facenet.service.scale;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.scale.ScaleDto;
+import org.facenet.dto.scale.ScaleStatsResponseDto;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Map;
@@ -18,6 +19,14 @@ public interface ScaleService {
      * Supports search: search on name, model fields
      */
     PageResponseDto<ScaleDto.Response> getAllScales(PageRequestDto pageRequest, Map<String, String> filters);
+
+    /**
+     * Get all scales with pagination, filters and statistics (V2)
+     * Supports filters: name, locationId, manufacturerId, protocolId, direction, isActive
+     * Supports search: search on name, model fields
+     * Returns: paginated data with total_scales, active_scales, inactive_scales
+     */
+    ScaleStatsResponseDto getAllScalesV2(PageRequestDto pageRequest, Map<String, String> filters);
 
     /**
      * Get scale by ID

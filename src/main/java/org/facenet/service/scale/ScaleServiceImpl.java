@@ -9,6 +9,7 @@ import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.specification.GenericSpecification;
 import org.facenet.dto.scale.ScaleDto;
+import org.facenet.dto.scale.ScaleStatsResponseDto;
 import org.facenet.entity.location.Location;
 import org.facenet.entity.manufacturer.ScaleManufacturer;
 import org.facenet.entity.protocol.Protocol;
@@ -70,6 +71,50 @@ public class ScaleServiceImpl implements ScaleService {
         Page<ScaleDto.Response> responsePage = page.map(ScaleMapper::toResponseDto);
         
         return PageResponseDto.from(responsePage);
+    }
+
+    @Override
+    public ScaleStatsResponseDto getAllScalesV2(PageRequestDto pageRequest, Map<String, String> filters) {
+        // Get paginated scales data (same as V1)
+        PageResponseDto<ScaleDto.Response> scalesData = getAllScales(pageRequest, filters);
+        
+        // Calculate statistics based on filters (excluding isActive filter)
+        Map<String, String> statsFilters = new HashMap<>(filters);
+        statsFilters.remove("isActive"); // Remove isActive to count all scales matching other filters
+        
+        GenericSpecification<Scale> spec = new GenericSpecification<>();
+        Specification<Scale> baseSpec = spec.buildSpecification(statsFilters);
+        
+        // Apply search if provided
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            Specification<Scale> searchSpec = spec.buildSearchSpecification(
+                pageRequest.getSearch(), "name", "model"
+            );
+            baseSpec = baseSpec.and(searchSpec);
+        }
+        
+        // Count total scales
+        long totalScales = scaleRepository.count(baseSpec);
+        
+        // Count active scales
+        Specification<Scale> activeSpec = baseSpec.and((root, query, cb) -> 
+            cb.equal(root.get("isActive"), true)
+        );
+        long activeScales = scaleRepository.count(activeSpec);
+        
+        // Count inactive scales
+        Specification<Scale> inactiveSpec = baseSpec.and((root, query, cb) -> 
+            cb.equal(root.get("isActive"), false)
+        );
+        long inactiveScales = scaleRepository.count(inactiveSpec);
+        
+        // Build response
+        return ScaleStatsResponseDto.builder()
+                .data(scalesData)
+                .totalScales(totalScales)
+                .activeScales(activeScales)
+                .inactiveScales(inactiveScales)
+                .build();
     }
 
     @Override

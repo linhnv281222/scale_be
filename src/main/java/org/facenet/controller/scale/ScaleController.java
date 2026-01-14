@@ -10,6 +10,7 @@ import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.response.ApiResponse;
 import org.facenet.dto.scale.ScaleDto;
+import org.facenet.dto.scale.ScaleStatsResponseDto;
 import org.facenet.service.scale.ScaleService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -81,6 +82,69 @@ public class ScaleController {
             .build();
         
         PageResponseDto<ScaleDto.Response> response = scaleService.getAllScales(pageRequest, filters);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * Get all scales with pagination, filters and statistics (V2)
+     * Supports search on name, model
+     * Supports filters: locationId (array), manufacturerId (array), protocolId (array), direction, isActive, model
+     * Returns: paginated data with total_scales, active_scales, inactive_scales
+     */
+    @GetMapping("/v2")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
+    @Operation(
+        summary = "Get all scales with statistics (V2)",
+        description = "Retrieve paginated list of scales with optional search and filters, including statistics. " +
+                     "Search: name, model. Filters: locationId (supports multiple), manufacturerId (supports multiple), protocolId (supports multiple), direction, isActive, model. " +
+                     "Response includes: total_scales, active_scales, inactive_scales"
+    )
+    public ResponseEntity<ApiResponse<?>> getAllScalesV2(
+            @RequestParam(value = "page", defaultValue = "0") Integer page,
+            @RequestParam(value = "size", defaultValue = "10") Integer size,
+            @RequestParam(value = "sort", required = false) String sort,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "locationId", required = false) java.util.List<Long> locationIds,
+            @RequestParam(value = "manufacturerId", required = false) java.util.List<Long> manufacturerIds,
+            @RequestParam(value = "protocolId", required = false) java.util.List<Long> protocolIds,
+            @RequestParam(value = "model", required = false) String model,
+            @RequestParam(value = "direction", required = false) String direction,
+            @RequestParam(value = "isActive", required = false) Boolean isActive) {
+        
+        Map<String, String> filters = new java.util.HashMap<>();
+        if (locationIds != null && !locationIds.isEmpty()) {
+            filters.put("location.id_in", locationIds.stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(",")));
+        }
+        if (manufacturerIds != null && !manufacturerIds.isEmpty()) {
+            filters.put("manufacturer.id_in", manufacturerIds.stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(",")));
+        }
+        if (protocolIds != null && !protocolIds.isEmpty()) {
+            filters.put("protocol.id_in", protocolIds.stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(",")));
+        }
+        if (model != null) {
+            filters.put("model", model);
+        }
+        if (direction != null) {
+            filters.put("direction", direction);
+        }
+        if (isActive != null) {
+            filters.put("isActive", String.valueOf(isActive));
+        }
+        
+        PageRequestDto pageRequest = PageRequestDto.builder()
+            .page(page)
+            .size(size)
+            .sort(sort)
+            .search(search)
+            .build();
+        
+        ScaleStatsResponseDto response = scaleService.getAllScalesV2(pageRequest, filters);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
