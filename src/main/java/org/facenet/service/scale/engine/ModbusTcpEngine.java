@@ -36,7 +36,7 @@ public class ModbusTcpEngine implements ScaleEngine {
     
     private final ScaleConfig config;
     private final BlockingQueue<MeasurementEvent> queue;
-    private volatile boolean stopped = false;
+    private volatile boolean stopped = true;
     private volatile boolean running = false;
     
     private ModbusMaster master;
@@ -176,7 +176,7 @@ public class ModbusTcpEngine implements ScaleEngine {
         
         try {
             // Lấy thông tin thanh ghi từ config (hỗ trợ nhiều format)
-            Integer startAddress = getDataConfigParam(dataConfig, "start_registers");
+            Integer startAddress = getDataConfigParam(dataConfig, "start_register");
             if (startAddress == null) {
                 startAddress = getDataConfigParam(dataConfig, "register_start"); // Fallback
             }

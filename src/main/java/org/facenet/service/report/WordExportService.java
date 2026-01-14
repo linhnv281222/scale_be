@@ -751,9 +751,23 @@ public class WordExportService {
             rowMap.put("data3Total", formatNumber(row.getData3Total()));
             rowMap.put("data4Total", formatNumber(row.getData4Total()));
             rowMap.put("data5Total", formatNumber(row.getData5Total()));
+            // Start values (V2 interval reports)
+            rowMap.put("data1Start", formatNumber(row.getData1Start()));
+            rowMap.put("data2Start", formatNumber(row.getData2Start()));
+            rowMap.put("data3Start", formatNumber(row.getData3Start()));
+            rowMap.put("data4Start", formatNumber(row.getData4Start()));
+            rowMap.put("data5Start", formatNumber(row.getData5Start()));
+            // End values (V2 interval reports)
+            rowMap.put("data1End", formatNumber(row.getData1End()));
+            rowMap.put("data2End", formatNumber(row.getData2End()));
+            rowMap.put("data3End", formatNumber(row.getData3End()));
+            rowMap.put("data4End", formatNumber(row.getData4End()));
+            rowMap.put("data5End", formatNumber(row.getData5End()));
             rowMap.put("period", row.getPeriod() != null ? row.getPeriod() : "");
-            // Back-compat with existing templates expecting recordCount column
-            rowMap.put("recordCount", row.getPeriod() != null ? row.getPeriod() : "");
+            rowMap.put("recordCount", row.getRecordCount() != null ? row.getRecordCount() : 0);
+            // Direction (for V2 reports with direction tracking)
+            rowMap.put("direction", row.getDirection() != null ? row.getDirection() : 0);
+            rowMap.put("directionName", getDirectionName(row.getDirection()));
             rows.add(rowMap);
         }
         model.put("rows", rows);
@@ -779,7 +793,56 @@ public class WordExportService {
         model.put("data4Max", formatNumber(summary.getData4Max()));
         model.put("data5Max", formatNumber(summary.getData5Max()));
 
+        // Direction-based summaries for V2 reports
+        if (reportData.getImportSummaries() != null) {
+            model.put("importSummaries", prepareDirectionSummaryModel(reportData.getImportSummaries()));
+        }
+        if (reportData.getExportSummaries() != null) {
+            model.put("exportSummaries", prepareDirectionSummaryModel(reportData.getExportSummaries()));
+        }
+        if (reportData.getUnknownSummaries() != null) {
+            model.put("unknownSummaries", prepareDirectionSummaryModel(reportData.getUnknownSummaries()));
+        }
+
         return model;
+    }
+
+    /**
+     * Prepare DirectionSummary object as a Map for template access
+     */
+    private Map<String, Object> prepareDirectionSummaryModel(ReportData.DirectionSummary dirSummary) {
+        Map<String, Object> summaryMap = new HashMap<>();
+        summaryMap.put("directionCode", dirSummary.getDirectionCode());
+        summaryMap.put("directionName", dirSummary.getDirectionName());
+        summaryMap.put("totalScales", dirSummary.getTotalScales() != null ? dirSummary.getTotalScales() : 0);
+        summaryMap.put("totalRecords", dirSummary.getTotalRecords() != null ? dirSummary.getTotalRecords() : 0);
+        summaryMap.put("data1GrandTotal", formatNumber(dirSummary.getData1GrandTotal()));
+        summaryMap.put("data2GrandTotal", formatNumber(dirSummary.getData2GrandTotal()));
+        summaryMap.put("data3GrandTotal", formatNumber(dirSummary.getData3GrandTotal()));
+        summaryMap.put("data4GrandTotal", formatNumber(dirSummary.getData4GrandTotal()));
+        summaryMap.put("data5GrandTotal", formatNumber(dirSummary.getData5GrandTotal()));
+        summaryMap.put("data1Average", formatNumber(dirSummary.getData1Average()));
+        summaryMap.put("data2Average", formatNumber(dirSummary.getData2Average()));
+        summaryMap.put("data3Average", formatNumber(dirSummary.getData3Average()));
+        summaryMap.put("data4Average", formatNumber(dirSummary.getData4Average()));
+        summaryMap.put("data5Average", formatNumber(dirSummary.getData5Average()));
+        return summaryMap;
+    }
+
+    /**
+     * Get direction name from direction code
+     * @param direction 0=Unknown, 1=Import/Nhập, 2=Export/Xuất
+     * @return Direction name in Vietnamese
+     */
+    private String getDirectionName(Integer direction) {
+        if (direction == null) {
+            return "Chưa rõ";
+        }
+        return switch (direction) {
+            case 1 -> "Nhập";
+            case 2 -> "Xuất";
+            default -> "Chưa rõ";
+        };
     }
 
     /**
