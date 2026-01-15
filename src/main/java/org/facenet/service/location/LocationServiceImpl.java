@@ -68,6 +68,20 @@ public class LocationServiceImpl implements LocationService {
     }
 
     @Override
+    public LocationDto.Response getLocationTreeByCode(String code) {
+        Location location = locationRepository.findByCode(code)
+                .orElseThrow(() -> new ResourceNotFoundException("Location", "code", code));
+        return buildTreeFromLocation(location);
+    }
+
+    @Override
+    public LocationDto.Response getLocationTreeById(Long id) {
+        Location location = locationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Location", "id", id));
+        return buildTreeFromLocation(location);
+    }
+
+    @Override
     @Cacheable(value = "locations", key = "#id")
     public LocationDto.Response getLocationById(@Param("id") Long id) {
         Location location = locationRepository.findByIdWithChildren(id)
@@ -198,5 +212,56 @@ public class LocationServiceImpl implements LocationService {
         }
 
         return roots;
+    }
+
+    /**
+     * Build tree from a specific location (as root) with all its descendants
+     */
+    private LocationDto.Response buildTreeFromLocation(Location rootLocation) {
+        // Load all descendants recursively
+        List<Location> allDescendants = loadAllDescendants(rootLocation.getId());
+        
+        // Build map for quick lookup including the root
+        Map<Long, LocationDto.Response> locationMap = new java.util.HashMap<>();
+        
+        // Add root to map
+        LocationDto.Response rootDto = LocationMapper.toResponseDto(rootLocation);
+        rootDto.setChildren(new java.util.ArrayList<>());
+        locationMap.put(rootLocation.getId(), rootDto);
+        
+        // Add all descendants to map
+        for (Location location : allDescendants) {
+            LocationDto.Response dto = LocationMapper.toResponseDto(location);
+            dto.setChildren(new java.util.ArrayList<>());
+            locationMap.put(location.getId(), dto);
+        }
+        
+        // Build parent-child relationships
+        for (Location location : allDescendants) {
+            if (location.getParent() != null) {
+                LocationDto.Response parentDto = locationMap.get(location.getParent().getId());
+                LocationDto.Response childDto = locationMap.get(location.getId());
+                if (parentDto != null && childDto != null) {
+                    parentDto.getChildren().add(childDto);
+                }
+            }
+        }
+        
+        return rootDto;
+    }
+
+    /**
+     * Recursively load all descendants of a location
+     */
+    private List<Location> loadAllDescendants(Long parentId) {
+        List<Location> descendants = new java.util.ArrayList<>();
+        List<Location> directChildren = locationRepository.findByParentId(parentId);
+        
+        for (Location child : directChildren) {
+            descendants.add(child);
+            descendants.addAll(loadAllDescendants(child.getId()));
+        }
+        
+        return descendants;
     }
 }

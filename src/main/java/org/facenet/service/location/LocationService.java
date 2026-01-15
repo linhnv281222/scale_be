@@ -24,6 +24,18 @@ public interface LocationService {
     List<LocationDto.Response> getLocationsTree();
 
     /**
+     * Get location tree from specific location (by code or parentId)
+     * Returns the matched location as root with all its children
+     */
+    LocationDto.Response getLocationTreeByCode(String code);
+
+    /**
+     * Get location tree from specific location by ID
+     * Returns the location as root with all its children
+     */
+    LocationDto.Response getLocationTreeById(Long id);
+
+    /**
      * Get location by ID
      */
     LocationDto.Response getLocationById(Long id);

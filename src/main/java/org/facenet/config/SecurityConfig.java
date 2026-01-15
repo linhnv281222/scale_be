@@ -116,7 +116,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Auth endpoints (allow both with and without /api/v1 prefix)
                         .requestMatchers("/auth/**", "/api/v1/auth/**").permitAll()
-                        .requestMatchers("/reports/**").permitAll()
+                        //.requestMatchers("/reports/**").permitAll()
+                        .requestMatchers("/api/organization-settings").permitAll()
 
                         // Swagger/OpenAPI endpoints
                         .requestMatchers(

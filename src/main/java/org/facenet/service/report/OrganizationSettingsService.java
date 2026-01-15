@@ -29,7 +29,7 @@ public class OrganizationSettingsService {
     private final OrganizationSettingsRepository repository;
     
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("png", "jpg", "jpeg");
-    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     private static final String LOGO_DIRECTORY = "src/main/resources/images/logos/";
     private static final String FAVICON_DIRECTORY = "src/main/resources/images/favicons/";
 
@@ -294,7 +294,7 @@ public class OrganizationSettingsService {
         }
 
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("File size exceeds maximum allowed size (5MB)");
+            throw new IllegalArgumentException("File size exceeds maximum allowed size (10MB)");
         }
 
         String originalFilename = file.getOriginalFilename();
@@ -340,7 +340,7 @@ public class OrganizationSettingsService {
         }
 
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("File size exceeds maximum allowed size (5MB)");
+            throw new IllegalArgumentException("File size exceeds maximum allowed size (10MB)");
         }
 
         String originalFilename = file.getOriginalFilename();

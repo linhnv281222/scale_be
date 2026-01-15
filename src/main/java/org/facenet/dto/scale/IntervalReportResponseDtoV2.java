@@ -26,9 +26,11 @@ public class IntervalReportResponseDtoV2 {
     private String toDate;
 
     /**
-     * Column display names resolved from scale_configs (sample scale).
+     * Column display names and units resolved from scale_configs (sample scale).
+     * Key: field name (data_1, data_2, etc.)
+     * Value: DataFieldInfo containing name and unit
      */
-    private Map<String, String> dataFieldNames;
+    private Map<String, DataFieldInfo> dataFieldNames;
 
     /**
      * Effective per-field aggregation method after applying defaults and special rules.
@@ -58,6 +60,19 @@ public class IntervalReportResponseDtoV2 {
     public static class Row {
         private ScaleInfo scale;
         private String period;
+        
+        /**
+         * Start time of the interval period
+         */
+        @JsonProperty("start_time")
+        private String startTime;
+        
+        /**
+         * End time of the interval period (may be current time if interval not ended)
+         */
+        @JsonProperty("end_time")
+        private String endTime;
+        
         private Integer recordCount;
 
         /**
@@ -98,9 +113,20 @@ public class IntervalReportResponseDtoV2 {
     @NoArgsConstructor
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class DataFieldInfo {
+        private String name;
+        private String unit;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class DataFieldValue {
         private String value;
         private String name;
+        private String unit;
 
         @JsonProperty("used")
         private boolean used;
@@ -125,6 +151,7 @@ public class IntervalReportResponseDtoV2 {
         private String value;
         private String aggregation; // SUM or AVG
         private String name;
+        private String unit;
 
         @JsonProperty("used")
         private boolean used;

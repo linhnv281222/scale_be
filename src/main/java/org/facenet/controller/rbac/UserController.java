@@ -106,7 +106,7 @@ public class UserController {
     public ResponseEntity<org.facenet.common.response.ApiResponse<UserDto.Response>> updateUserRoles(
             @PathVariable("id") Long id,
             @RequestBody Map<String, List<Integer>> request) {
-        List<Integer> roleIds = request.get("role_ids");
+        List<Integer> roleIds = request.get("roleIds");
         UserDto.Response user = userService.updateUserRoles(id, roleIds);
         return ResponseEntity.ok(org.facenet.common.response.ApiResponse.success(user, "User roles updated successfully"));
     }

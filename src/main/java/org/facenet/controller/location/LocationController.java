@@ -33,20 +33,26 @@ public class LocationController {
 
     /**
      * 1. Get all locations - Tree structure or Paginated list
-     * If tree=true or no params: Return tree structure
-     * If search/code/parentId/page/size provided: Return paginated list with filters
+     * 
+     * QUAN TRỌNG: Khi có code hoặc parentId, phân trang sẽ BỊ BỎ QUA HOÀN TOÀN
+     * 
+     * Priority logic:
+     * 1. code -> Return tree from location (BỎ QUA page/size)
+     * 2. parentId -> Return tree from location (BỎ QUA page/size)
+     * 3. tree=true OR no params -> Return full tree
+     * 4. search + page/size -> Return paginated flat list
      * 
      * Supports:
-     * - tree: Return tree structure (default if no other params)
-     * - search: Search by name, code, description
-     * - code: Filter by exact code
-     * - parentId: Filter by parent location
-     * - page, size: Pagination
+     * - code: Tìm theo mã vị trí, trả về CÂY ĐẦY ĐỦ với vị trí này làm gốc (BỎ QUA phân trang)
+     * - parentId: Tìm theo ID vị trí, trả về CÂY ĐẦY ĐỦ với vị trí này làm gốc (BỎ QUA phân trang)
+     * - tree: Trả về cây đầy đủ tất cả vị trí (mặc định nếu không có params khác)
+     * - search: Tìm kiếm theo name/code/description, trả về danh sách phẳng CÓ phân trang
+     * - page, size: Phân trang (CHỈ áp dụng khi search, BỊ BỎ QUA khi có code/parentId)
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
     @Operation(summary = "Get all locations", 
-               description = "Get locations in tree structure (default) or paginated list with filters. Use tree=true for tree, or add search/filter params for paginated list")
+               description = "Lấy vị trí dạng cây. Khi có code/parentId sẽ BỎ QUA phân trang và trả về cây đầy đủ. Chỉ dùng phân trang khi search.")
     public ResponseEntity<ApiResponse<?>> getAllLocations(
             @RequestParam(value = "tree", required = false) Boolean tree,
             @RequestParam(value = "page", required = false) Integer page,
@@ -56,23 +62,29 @@ public class LocationController {
             @RequestParam(value = "code", required = false) String code,
             @RequestParam(value = "parentId", required = false) Long parentId) {
         
-        // If tree=true OR no params at all, return tree structure
-        boolean shouldReturnTree = (tree != null && tree) || 
-                                   (page == null && size == null && search == null && code == null && parentId == null);
+        // PRIORITY 1: If code is provided -> Return tree as array (BỎ QUA HOÀN TOÀN phân trang)
+        if (code != null) {
+            LocationDto.Response locationTree = locationService.getLocationTreeByCode(code);
+            return ResponseEntity.ok(ApiResponse.success(List.of(locationTree)));
+        }
         
-        if (shouldReturnTree) {
+        // PRIORITY 2: If parentId is provided -> Return tree as array (BỎ QUA HOÀN TOÀN phân trang)
+        if (parentId != null) {
+            LocationDto.Response locationTree = locationService.getLocationTreeById(parentId);
+            return ResponseEntity.ok(ApiResponse.success(List.of(locationTree)));
+        }
+        
+        // If tree=true OR no params at all, return full tree structure
+        boolean shouldReturnFullTree = (tree != null && tree) || 
+                                        (page == null && size == null && search == null);
+        
+        if (shouldReturnFullTree) {
             List<LocationDto.Response> locations = locationService.getLocationsTree();
             return ResponseEntity.ok(ApiResponse.success(locations));
         }
         
-        // Otherwise, return paginated list with filters
+        // Otherwise, return paginated list for search
         Map<String, String> filters = new java.util.HashMap<>();
-        if (code != null) {
-            filters.put("code", code);
-        }
-        if (parentId != null) {
-            filters.put("parent.id", parentId.toString());
-        }
         
         PageRequestDto pageRequest = PageRequestDto.builder()
             .page(page != null ? page : 0)

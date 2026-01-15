@@ -10,17 +10,24 @@ import org.facenet.dto.scale.IntervalReportResponseDtoV2;
 import org.facenet.dto.scale.ReportRequestDto;
 import org.facenet.dto.scale.ReportResponseDto;
 import org.facenet.entity.scale.Scale;
+import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.entity.scale.ScaleDailyReport;
+import org.facenet.entity.shift.Shift;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleDailyReportRepository;
 import org.facenet.repository.scale.ScaleRepository;
+import org.facenet.repository.shift.ShiftRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +50,7 @@ public class ReportServiceImpl implements ReportService {
     private final ScaleDailyReportRepository dailyReportRepository;
     private final ScaleConfigRepository scaleConfigRepository;
     private final ScaleRepository scaleRepository;
+    private final ShiftRepository shiftRepository;
 
     private static final String CUMULATIVE_WEIGHT_NAME = "Khối lượng tích lũy";
     private static final String WEIGHT_OUTPUT_NAME = "Khối lượng";
@@ -166,18 +174,21 @@ public class ReportServiceImpl implements ReportService {
         List<IntervalReportResponseDtoV2.Row> v2Rows = new ArrayList<>();
         List<Long> scaleIds = resolveScaleIdsForIntervalReportV2(request);
         
+        // Get data field names with units first
+        Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames = extractDataFieldNamesWithUnits(scaleIds);
+        
         for (IntervalReportResponseDto.Row v1Row : v1Response.getData()) {
             Long scaleId = v1Row.getScale().getId();
             
             // Fetch start and end values
             Map<String, IntervalReportResponseDtoV2.DataFieldValue> startValues = 
-                    fetchStartValues(scaleId, request.getFromTime(), v1Row.getDataValues());
+                    fetchStartValues(scaleId, request.getFromTime(), v1Row.getDataValues(), dataFieldNames);
             Map<String, IntervalReportResponseDtoV2.DataFieldValue> endValues = 
-                    fetchEndValues(scaleId, request.getToTime(), v1Row.getDataValues());
+                    fetchEndValues(scaleId, request.getToTime(), v1Row.getDataValues(), dataFieldNames);
 
             // Convert data values
             Map<String, IntervalReportResponseDtoV2.DataFieldValue> dataValues = 
-                    convertDataValues(v1Row.getDataValues());
+                    convertDataValues(v1Row.getDataValues(), dataFieldNames);
 
             // Calculate ratio
             IntervalReportResponseDtoV2.RatioValue ratio = calculateRatio(
@@ -186,10 +197,15 @@ public class ReportServiceImpl implements ReportService {
             // Convert scale info (includes direction)
             IntervalReportResponseDtoV2.ScaleInfo scaleInfo = convertScaleInfo(v1Row.getScale());
             
+            // Calculate start and end time for this interval period
+            String[] timeRange = calculateIntervalTimeRange(v1Row.getPeriod(), request.getInterval(), request.getToTime());
+            
             // Build V2 row with direction code
             IntervalReportResponseDtoV2.Row v2Row = IntervalReportResponseDtoV2.Row.builder()
                     .scale(scaleInfo)
                     .period(v1Row.getPeriod())
+                    .startTime(timeRange[0])
+                    .endTime(timeRange[1])
                     .recordCount(v1Row.getRecordCount())
                     .startValues(startValues)
                     .endValues(endValues)
@@ -203,14 +219,14 @@ public class ReportServiceImpl implements ReportService {
 
         // Calculate overview statistics (grouped by direction)
         Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> overview = 
-                calculateOverview(v2Rows, v1Response.getData());
+                calculateOverview(v2Rows, v1Response.getData(), dataFieldNames);
 
         // Build response wrapper (not paginated, but contains overview)
         IntervalReportResponseDtoV2 responseData = IntervalReportResponseDtoV2.builder()
                 .interval(request.getInterval())
                 .fromDate(request.getFromTime().toString())
                 .toDate(request.getToTime().toString())
-                .dataFieldNames(extractDataFieldNames(v1Response.getData()))
+                .dataFieldNames(dataFieldNames)
                 .aggregationByField(extractAggregationMethods(v1Request))
                 .ratioFormula(ratioFormula)
                 .overview(overview)
@@ -276,7 +292,8 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private Map<String, IntervalReportResponseDtoV2.DataFieldValue> fetchStartValues(
-            Long scaleId, OffsetDateTime fromTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues) {
+            Long scaleId, OffsetDateTime fromTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
         try {
             String sql = """
                     SELECT data_1, data_2, data_3, data_4, data_5
@@ -289,16 +306,17 @@ public class ReportServiceImpl implements ReportService {
             List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, scaleId, fromTime);
             if (!results.isEmpty()) {
                 Map<String, Object> row = results.get(0);
-                return convertToDataFieldValues(row, defaultValues);
+                return convertToDataFieldValues(row, defaultValues, dataFieldNames);
             }
         } catch (Exception e) {
             log.warn("[REPORT-V2] Error fetching start values for scale {}: {}", scaleId, e.getMessage());
         }
-        return convertToDataFieldValuesFromV1(defaultValues);
+        return convertToDataFieldValuesFromV1(defaultValues, dataFieldNames);
     }
 
     private Map<String, IntervalReportResponseDtoV2.DataFieldValue> fetchEndValues(
-            Long scaleId, OffsetDateTime toTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues) {
+            Long scaleId, OffsetDateTime toTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
         try {
             String sql = """
                     SELECT data_1, data_2, data_3, data_4, data_5
@@ -311,25 +329,28 @@ public class ReportServiceImpl implements ReportService {
             List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, scaleId, toTime);
             if (!results.isEmpty()) {
                 Map<String, Object> row = results.get(0);
-                return convertToDataFieldValues(row, defaultValues);
+                return convertToDataFieldValues(row, defaultValues, dataFieldNames);
             }
         } catch (Exception e) {
             log.warn("[REPORT-V2] Error fetching end values for scale {}: {}", scaleId, e.getMessage());
         }
-        return convertToDataFieldValuesFromV1(defaultValues);
+        return convertToDataFieldValuesFromV1(defaultValues, dataFieldNames);
     }
 
     private Map<String, IntervalReportResponseDtoV2.DataFieldValue> convertToDataFieldValues(
-            Map<String, Object> row, Map<String, IntervalReportResponseDto.DataFieldValue> metaValues) {
+            Map<String, Object> row, Map<String, IntervalReportResponseDto.DataFieldValue> metaValues,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
         Map<String, IntervalReportResponseDtoV2.DataFieldValue> result = new HashMap<>();
         for (int i = 1; i <= 5; i++) {
             String key = "data_" + i;
             String value = (String) row.get(key);
             IntervalReportResponseDto.DataFieldValue meta = metaValues.get(key);
+            IntervalReportResponseDtoV2.DataFieldInfo fieldInfo = dataFieldNames.get(key);
             
             result.put(key, IntervalReportResponseDtoV2.DataFieldValue.builder()
                     .value(value != null ? value : "0")
                     .name(meta != null ? meta.getName() : "Data " + i)
+                    .unit(fieldInfo != null ? fieldInfo.getUnit() : "")
                     .used(meta != null && meta.isUsed())
                     .build());
         }
@@ -337,20 +358,25 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private Map<String, IntervalReportResponseDtoV2.DataFieldValue> convertToDataFieldValuesFromV1(
-            Map<String, IntervalReportResponseDto.DataFieldValue> v1Values) {
+            Map<String, IntervalReportResponseDto.DataFieldValue> v1Values,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
         Map<String, IntervalReportResponseDtoV2.DataFieldValue> result = new HashMap<>();
-        v1Values.forEach((key, v1Value) -> 
-                result.put(key, IntervalReportResponseDtoV2.DataFieldValue.builder()
-                        .value(v1Value.getValue())
-                        .name(v1Value.getName())
-                        .used(v1Value.isUsed())
-                        .build()));
+        v1Values.forEach((key, v1Value) -> {
+            IntervalReportResponseDtoV2.DataFieldInfo fieldInfo = dataFieldNames.get(key);
+            result.put(key, IntervalReportResponseDtoV2.DataFieldValue.builder()
+                    .value(v1Value.getValue())
+                    .name(v1Value.getName())
+                    .unit(fieldInfo != null ? fieldInfo.getUnit() : "")
+                    .used(v1Value.isUsed())
+                    .build());
+        });
         return result;
     }
 
     private Map<String, IntervalReportResponseDtoV2.DataFieldValue> convertDataValues(
-            Map<String, IntervalReportResponseDto.DataFieldValue> v1Values) {
-        return convertToDataFieldValuesFromV1(v1Values);
+            Map<String, IntervalReportResponseDto.DataFieldValue> v1Values,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
+        return convertToDataFieldValuesFromV1(v1Values, dataFieldNames);
     }
 
     private IntervalReportResponseDtoV2.RatioValue calculateRatio(
@@ -419,7 +445,8 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> calculateOverview(
-            List<IntervalReportResponseDtoV2.Row> v2Rows, List<IntervalReportResponseDto.Row> v1Rows) {
+            List<IntervalReportResponseDtoV2.Row> v2Rows, List<IntervalReportResponseDto.Row> v1Rows,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
         Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> overview = new HashMap<>();
         
         if (v2Rows.isEmpty()) return overview;
@@ -473,10 +500,12 @@ public class ReportServiceImpl implements ReportService {
                             value = count > 0 ? String.format("%.2f", overallValue / count) : "0";
                         }
                         
+                        IntervalReportResponseDtoV2.DataFieldInfo fieldInfo = dataFieldNames.get(dataKey);
                         fieldStats.put(dataKey, IntervalReportResponseDtoV2.OverviewStats.builder()
                                 .value(value)
                                 .aggregation(aggregation)
                                 .name(sampleField.getName())
+                                .unit(fieldInfo != null ? fieldInfo.getUnit() : "")
                                 .used(true)
                                 .build());
                     }
@@ -512,6 +541,170 @@ public class ReportServiceImpl implements ReportService {
         IntervalReportResponseDto.Row sampleRow = rows.get(0);
         sampleRow.getDataValues().forEach((key, value) -> names.put(key, value.getName()));
         return names;
+    }
+
+    /**
+     * Extract data field names with units from scale configs
+     */
+    private Map<String, IntervalReportResponseDtoV2.DataFieldInfo> extractDataFieldNamesWithUnits(List<Long> scaleIds) {
+        Map<String, IntervalReportResponseDtoV2.DataFieldInfo> fieldInfos = new HashMap<>();
+        
+        if (scaleIds == null || scaleIds.isEmpty()) {
+            // Return default field infos without units
+            for (int i = 1; i <= 5; i++) {
+                String key = "data_" + i;
+                fieldInfos.put(key, IntervalReportResponseDtoV2.DataFieldInfo.builder()
+                        .name("Data " + i)
+                        .unit("")
+                        .build());
+            }
+            return fieldInfos;
+        }
+        
+        // Get first scale's config
+        Long sampleScaleId = scaleIds.get(0);
+        Optional<ScaleConfig> configOpt = scaleConfigRepository.findById(sampleScaleId);
+        
+        if (configOpt.isEmpty()) {
+            // Return default field infos without units
+            for (int i = 1; i <= 5; i++) {
+                String key = "data_" + i;
+                fieldInfos.put(key, IntervalReportResponseDtoV2.DataFieldInfo.builder()
+                        .name("Data " + i)
+                        .unit("")
+                        .build());
+            }
+            return fieldInfos;
+        }
+        
+        ScaleConfig config = configOpt.get();
+        
+        // Extract name and unit from each data field
+        extractFieldInfo(fieldInfos, "data_1", config.getData1());
+        extractFieldInfo(fieldInfos, "data_2", config.getData2());
+        extractFieldInfo(fieldInfos, "data_3", config.getData3());
+        extractFieldInfo(fieldInfos, "data_4", config.getData4());
+        extractFieldInfo(fieldInfos, "data_5", config.getData5());
+        
+        return fieldInfos;
+    }
+    
+    /**
+     * Extract name and unit from data field config
+     */
+    private void extractFieldInfo(Map<String, IntervalReportResponseDtoV2.DataFieldInfo> fieldInfos, 
+                                   String key, Map<String, Object> dataConfig) {
+        if (dataConfig == null) {
+            fieldInfos.put(key, IntervalReportResponseDtoV2.DataFieldInfo.builder()
+                    .name("")
+                    .unit("")
+                    .build());
+            return;
+        }
+        
+        String name = dataConfig.get("name") != null ? dataConfig.get("name").toString() : "";
+        String unit = dataConfig.get("unit") != null ? dataConfig.get("unit").toString() : "";
+        
+        fieldInfos.put(key, IntervalReportResponseDtoV2.DataFieldInfo.builder()
+                .name(name)
+                .unit(unit)
+                .build());
+    }
+    
+    /**
+     * Calculate start and end time for interval period
+     * @param period Period string (e.g., "2026-01-14 CA1", "2026-01-14 09:00", "2026-01-14")
+     * @param interval Interval type
+     * @param requestToTime Request end time
+     * @return Array [startTime, endTime]
+     */
+    private String[] calculateIntervalTimeRange(String period, IntervalReportRequestDtoV2.TimeInterval interval, 
+                                                OffsetDateTime requestToTime) {
+        try {
+            OffsetDateTime startTime;
+            OffsetDateTime endTime;
+            OffsetDateTime now = OffsetDateTime.now();
+            
+            switch (interval) {
+                case SHIFT -> {
+                    // Period format: "2026-01-14 CA1" or "2026-01-14 CA2" or "2026-01-14 CA3"
+                    String[] parts = period.split(" ");
+                    if (parts.length < 2) {
+                        return new String[]{period, period};
+                    }
+                    LocalDate date = LocalDate.parse(parts[0]);
+                    String shiftCode = parts[1];
+                    
+                    // Get shift times from database instead of hardcode
+                    List<Shift> shifts = shiftRepository.findAll();
+                    Optional<Shift> shiftOpt = shifts.stream()
+                            .filter(s -> s.getCode().equalsIgnoreCase(shiftCode))
+                            .findFirst();
+                    
+                    if (shiftOpt.isEmpty()) {
+                        log.warn("[REPORT-V2] Shift not found in database: {}, falling back to period string", shiftCode);
+                        return new String[]{period, period};
+                    }
+                    
+                    Shift shift = shiftOpt.get();
+                    startTime = date.atTime(shift.getStartTime()).atZone(ZoneId.systemDefault()).toOffsetDateTime();
+                    
+                    // Handle shift that crosses midnight (endTime < startTime)
+                    if (shift.getEndTime().isBefore(shift.getStartTime())) {
+                        endTime = date.plusDays(1).atTime(shift.getEndTime()).atZone(ZoneId.systemDefault()).toOffsetDateTime();
+                    } else {
+                        endTime = date.atTime(shift.getEndTime()).atZone(ZoneId.systemDefault()).toOffsetDateTime();
+                    }
+                }
+                case HOUR -> {
+                    // Period format: "2026-01-14 09:00"
+                    LocalDateTime dateTime = LocalDateTime.parse(period.replace(" ", "T") + ":00");
+                    startTime = dateTime.atZone(ZoneId.systemDefault()).toOffsetDateTime();
+                    endTime = startTime.plusHours(1);
+                }
+                case DAY -> {
+                    // Period format: "2026-01-14"
+                    LocalDate date = LocalDate.parse(period);
+                    startTime = date.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
+                    endTime = startTime.plusDays(1);
+                }
+                case WEEK -> {
+                    // Period format: "2026-W03" (ISO week)
+                    String[] parts = period.split("-W");
+                    if (parts.length < 2) {
+                        return new String[]{period, period};
+                    }
+                    int year = Integer.parseInt(parts[0]);
+                    int week = Integer.parseInt(parts[1]);
+                    LocalDate date = LocalDate.ofYearDay(year, 1)
+                            .with(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR, week)
+                            .with(java.time.DayOfWeek.MONDAY);
+                    startTime = date.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
+                    endTime = startTime.plusWeeks(1);
+                }
+                default -> {
+                    return new String[]{period, period};
+                }
+            }
+            
+            // If end time is in the future or after request's toTime, use current time or toTime
+            if (endTime.isAfter(now)) {
+                endTime = now;
+            }
+            if (requestToTime != null && endTime.isAfter(requestToTime)) {
+                endTime = requestToTime;
+            }
+            
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            return new String[]{
+                    startTime.format(formatter),
+                    endTime.format(formatter)
+            };
+            
+        } catch (Exception e) {
+            log.warn("Failed to parse period '{}' for interval {}: {}", period, interval, e.getMessage());
+            return new String[]{period, period};
+        }
     }
 
     private Map<String, String> extractAggregationMethods(IntervalReportRequestDto request) {
