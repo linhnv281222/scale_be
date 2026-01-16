@@ -13,10 +13,12 @@ import org.facenet.entity.scale.Scale;
 import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.entity.scale.ScaleDailyReport;
 import org.facenet.entity.shift.Shift;
+import org.facenet.entity.shift.ShiftResult;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleDailyReportRepository;
 import org.facenet.repository.scale.ScaleRepository;
 import org.facenet.repository.shift.ShiftRepository;
+import org.facenet.repository.shift.ShiftResultRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,7 @@ public class ReportServiceImpl implements ReportService {
     private final ScaleConfigRepository scaleConfigRepository;
     private final ScaleRepository scaleRepository;
     private final ShiftRepository shiftRepository;
+    private final ShiftResultRepository shiftResultRepository;
 
     private static final String CUMULATIVE_WEIGHT_NAME = "Khối lượng tích lũy";
     private static final String WEIGHT_OUTPUT_NAME = "Khối lượng";
@@ -180,15 +183,22 @@ public class ReportServiceImpl implements ReportService {
         for (IntervalReportResponseDto.Row v1Row : v1Response.getData()) {
             Long scaleId = v1Row.getScale().getId();
             
-            // Fetch start and end values
+            // Calculate start and end time for this interval period
+            String[] timeRange = calculateIntervalTimeRange(v1Row.getPeriod(), request.getInterval(), request.getToTime());
+            
+            // Parse time range to OffsetDateTime for fetching values
+            OffsetDateTime periodStartTime = parseTimeString(timeRange[0]);
+            OffsetDateTime periodEndTime = parseTimeString(timeRange[1]);
+            
+            // Fetch start and end values based on the specific period's time range
             Map<String, IntervalReportResponseDtoV2.DataFieldValue> startValues = 
-                    fetchStartValues(scaleId, request.getFromTime(), v1Row.getDataValues(), dataFieldNames);
+                    fetchStartValues(scaleId, periodStartTime, v1Row.getDataValues(), dataFieldNames, request.getInterval(), v1Row.getShift());
             Map<String, IntervalReportResponseDtoV2.DataFieldValue> endValues = 
-                    fetchEndValues(scaleId, request.getToTime(), v1Row.getDataValues(), dataFieldNames);
+                    fetchEndValues(scaleId, periodEndTime, v1Row.getDataValues(), dataFieldNames, request.getInterval(), v1Row.getShift());
 
-            // Convert data values
+            // Convert data values with special handling for data_1 (ABS of end - start)
             Map<String, IntervalReportResponseDtoV2.DataFieldValue> dataValues = 
-                    convertDataValues(v1Row.getDataValues(), dataFieldNames);
+                    convertDataValuesWithAbs(v1Row.getDataValues(), startValues, endValues, dataFieldNames);
 
             // Calculate ratio
             IntervalReportResponseDtoV2.RatioValue ratio = calculateRatio(
@@ -196,9 +206,6 @@ public class ReportServiceImpl implements ReportService {
 
             // Convert scale info (includes direction)
             IntervalReportResponseDtoV2.ScaleInfo scaleInfo = convertScaleInfo(v1Row.getScale());
-            
-            // Calculate start and end time for this interval period
-            String[] timeRange = calculateIntervalTimeRange(v1Row.getPeriod(), request.getInterval(), request.getToTime());
             
             // Build V2 row with direction code
             IntervalReportResponseDtoV2.Row v2Row = IntervalReportResponseDtoV2.Row.builder()
@@ -220,6 +227,10 @@ public class ReportServiceImpl implements ReportService {
         // Calculate overview statistics (grouped by direction)
         Map<String, Map<String, IntervalReportResponseDtoV2.OverviewStats>> overview = 
                 calculateOverview(v2Rows, v1Response.getData(), dataFieldNames);
+        
+        // Calculate dataFieldSummaries (aggregate across all rows)
+        Map<String, IntervalReportResponseDtoV2.DataFieldSummary> dataFieldSummaries = 
+                calculateDataFieldSummaries(v2Rows, dataFieldNames);
 
         // Build response wrapper (not paginated, but contains overview)
         IntervalReportResponseDtoV2 responseData = IntervalReportResponseDtoV2.builder()
@@ -230,6 +241,7 @@ public class ReportServiceImpl implements ReportService {
                 .aggregationByField(extractAggregationMethods(v1Request))
                 .ratioFormula(ratioFormula)
                 .overview(overview)
+                .dataFieldSummaries(dataFieldSummaries)
                 .rows(v2Rows)
                 .build();
 
@@ -253,10 +265,27 @@ public class ReportServiceImpl implements ReportService {
 
     private Map<String, IntervalReportRequestDto.AggregationMethod> convertAggregationV2ToV1(
             Map<String, IntervalReportRequestDtoV2.AggregationMethod> v2Methods) {
-        if (v2Methods == null) return null;
         Map<String, IntervalReportRequestDto.AggregationMethod> v1Methods = new HashMap<>();
-        v2Methods.forEach((key, value) -> 
-                v1Methods.put(key, IntervalReportRequestDto.AggregationMethod.valueOf(value.name())));
+        
+        // Apply defaults: data_1 = ABS, data_2-5 = AVG
+        for (int i = 1; i <= 5; i++) {
+            String key = "data_" + i;
+            IntervalReportRequestDtoV2.AggregationMethod v2Method = 
+                    v2Methods != null ? v2Methods.get(key) : null;
+            
+            if (v2Method != null) {
+                // Use explicitly provided method
+                v1Methods.put(key, IntervalReportRequestDto.AggregationMethod.valueOf(v2Method.name()));
+            } else {
+                // Apply defaults
+                if (i == 1) {
+                    v1Methods.put(key, IntervalReportRequestDto.AggregationMethod.ABS);
+                } else {
+                    v1Methods.put(key, IntervalReportRequestDto.AggregationMethod.AVG);
+                }
+            }
+        }
+        
         return v1Methods;
     }
 
@@ -293,20 +322,60 @@ public class ReportServiceImpl implements ReportService {
 
     private Map<String, IntervalReportResponseDtoV2.DataFieldValue> fetchStartValues(
             Long scaleId, OffsetDateTime fromTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues,
-            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames,
+            IntervalReportRequestDtoV2.TimeInterval interval,
+            IntervalReportResponseDto.ShiftInfo shiftInfo) {
         try {
             String sql = """
                     SELECT data_1, data_2, data_3, data_4, data_5
                     FROM weighing_logs
-                    WHERE scale_id = ? AND created_at >= ?
-                    ORDER BY created_at ASC
+                    WHERE scale_id = ? AND last_time >= ?
+                    ORDER BY last_time ASC
                     LIMIT 1
                     """;
             
             List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, scaleId, fromTime);
             if (!results.isEmpty()) {
                 Map<String, Object> row = results.get(0);
-                return convertToDataFieldValues(row, defaultValues, dataFieldNames);
+                Map<String, IntervalReportResponseDtoV2.DataFieldValue> values = convertToDataFieldValues(row, defaultValues, dataFieldNames);
+                
+                // If data_1 is null and interval is SHIFT, try to get from shift_results
+                if ((values.get("data_1").getValue() == null || values.get("data_1").getValue().equals("0")) 
+                    && interval == IntervalReportRequestDtoV2.TimeInterval.SHIFT 
+                    && shiftInfo != null) {
+                    String data1FromShiftResult = fetchStartValueFromShiftResult(scaleId, shiftInfo.getId(), fromTime.toLocalDate());
+                    if (data1FromShiftResult != null) {
+                        log.info("[REPORT-V2] Using start value from shift_results for scale {} shift {}: {}", 
+                                scaleId, shiftInfo.getCode(), data1FromShiftResult);
+                        IntervalReportResponseDtoV2.DataFieldValue data1Value = values.get("data_1");
+                        values.put("data_1", IntervalReportResponseDtoV2.DataFieldValue.builder()
+                                .value(data1FromShiftResult)
+                                .name(data1Value.getName())
+                                .unit(data1Value.getUnit())
+                                .used(data1Value.isUsed())
+                                .build());
+                    }
+                }
+                
+                return values;
+            }
+            
+            // If no data in weighing_logs and interval is SHIFT, try shift_results
+            if (interval == IntervalReportRequestDtoV2.TimeInterval.SHIFT && shiftInfo != null) {
+                String data1FromShiftResult = fetchStartValueFromShiftResult(scaleId, shiftInfo.getId(), fromTime.toLocalDate());
+                if (data1FromShiftResult != null) {
+                    log.info("[REPORT-V2] No weighing_logs data, using start value from shift_results for scale {} shift {}: {}", 
+                            scaleId, shiftInfo.getCode(), data1FromShiftResult);
+                    Map<String, IntervalReportResponseDtoV2.DataFieldValue> values = convertToDataFieldValuesFromV1(defaultValues, dataFieldNames);
+                    IntervalReportResponseDtoV2.DataFieldValue data1Value = values.get("data_1");
+                    values.put("data_1", IntervalReportResponseDtoV2.DataFieldValue.builder()
+                            .value(data1FromShiftResult)
+                            .name(data1Value.getName())
+                            .unit(data1Value.getUnit())
+                            .used(data1Value.isUsed())
+                            .build());
+                    return values;
+                }
             }
         } catch (Exception e) {
             log.warn("[REPORT-V2] Error fetching start values for scale {}: {}", scaleId, e.getMessage());
@@ -316,20 +385,60 @@ public class ReportServiceImpl implements ReportService {
 
     private Map<String, IntervalReportResponseDtoV2.DataFieldValue> fetchEndValues(
             Long scaleId, OffsetDateTime toTime, Map<String, IntervalReportResponseDto.DataFieldValue> defaultValues,
-            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames,
+            IntervalReportRequestDtoV2.TimeInterval interval,
+            IntervalReportResponseDto.ShiftInfo shiftInfo) {
         try {
             String sql = """
                     SELECT data_1, data_2, data_3, data_4, data_5
                     FROM weighing_logs
-                    WHERE scale_id = ? AND created_at <= ?
-                    ORDER BY created_at DESC
+                    WHERE scale_id = ? AND last_time <= ?
+                    ORDER BY last_time DESC
                     LIMIT 1
                     """;
             
             List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, scaleId, toTime);
             if (!results.isEmpty()) {
                 Map<String, Object> row = results.get(0);
-                return convertToDataFieldValues(row, defaultValues, dataFieldNames);
+                Map<String, IntervalReportResponseDtoV2.DataFieldValue> values = convertToDataFieldValues(row, defaultValues, dataFieldNames);
+                
+                // If data_1 is null and interval is SHIFT, try to get from shift_results
+                if ((values.get("data_1").getValue() == null || values.get("data_1").getValue().equals("0")) 
+                    && interval == IntervalReportRequestDtoV2.TimeInterval.SHIFT 
+                    && shiftInfo != null) {
+                    String data1FromShiftResult = fetchEndValueFromShiftResult(scaleId, shiftInfo.getId(), toTime.toLocalDate());
+                    if (data1FromShiftResult != null) {
+                        log.info("[REPORT-V2] Using end value from shift_results for scale {} shift {}: {}", 
+                                scaleId, shiftInfo.getCode(), data1FromShiftResult);
+                        IntervalReportResponseDtoV2.DataFieldValue data1Value = values.get("data_1");
+                        values.put("data_1", IntervalReportResponseDtoV2.DataFieldValue.builder()
+                                .value(data1FromShiftResult)
+                                .name(data1Value.getName())
+                                .unit(data1Value.getUnit())
+                                .used(data1Value.isUsed())
+                                .build());
+                    }
+                }
+                
+                return values;
+            }
+            
+            // If no data in weighing_logs and interval is SHIFT, try shift_results
+            if (interval == IntervalReportRequestDtoV2.TimeInterval.SHIFT && shiftInfo != null) {
+                String data1FromShiftResult = fetchEndValueFromShiftResult(scaleId, shiftInfo.getId(), toTime.toLocalDate());
+                if (data1FromShiftResult != null) {
+                    log.info("[REPORT-V2] No weighing_logs data, using end value from shift_results for scale {} shift {}: {}", 
+                            scaleId, shiftInfo.getCode(), data1FromShiftResult);
+                    Map<String, IntervalReportResponseDtoV2.DataFieldValue> values = convertToDataFieldValuesFromV1(defaultValues, dataFieldNames);
+                    IntervalReportResponseDtoV2.DataFieldValue data1Value = values.get("data_1");
+                    values.put("data_1", IntervalReportResponseDtoV2.DataFieldValue.builder()
+                            .value(data1FromShiftResult)
+                            .name(data1Value.getName())
+                            .unit(data1Value.getUnit())
+                            .used(data1Value.isUsed())
+                            .build());
+                    return values;
+                }
             }
         } catch (Exception e) {
             log.warn("[REPORT-V2] Error fetching end values for scale {}: {}", scaleId, e.getMessage());
@@ -377,6 +486,90 @@ public class ReportServiceImpl implements ReportService {
             Map<String, IntervalReportResponseDto.DataFieldValue> v1Values,
             Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
         return convertToDataFieldValuesFromV1(v1Values, dataFieldNames);
+    }
+    
+    /**
+     * Fetch start value from shift_results table
+     */
+    private String fetchStartValueFromShiftResult(Long scaleId, Long shiftId, LocalDate shiftDate) {
+        try {
+            Optional<ShiftResult> shiftResult = shiftResultRepository
+                    .findByScaleIdAndShiftIdAndShiftDate(scaleId, shiftId, shiftDate);
+            
+            if (shiftResult.isPresent() && shiftResult.get().getStartValueData1() != null) {
+                return shiftResult.get().getStartValueData1();
+            }
+        } catch (Exception e) {
+            log.warn("[REPORT-V2] Error fetching start value from shift_results for scale {} shift {} date {}: {}", 
+                    scaleId, shiftId, shiftDate, e.getMessage());
+        }
+        return null;
+    }
+    
+    /**
+     * Fetch end value from shift_results table
+     */
+    private String fetchEndValueFromShiftResult(Long scaleId, Long shiftId, LocalDate shiftDate) {
+        try {
+            Optional<ShiftResult> shiftResult = shiftResultRepository
+                    .findByScaleIdAndShiftIdAndShiftDate(scaleId, shiftId, shiftDate);
+            
+            if (shiftResult.isPresent() && shiftResult.get().getEndValueData1() != null) {
+                return shiftResult.get().getEndValueData1();
+            }
+        } catch (Exception e) {
+            log.warn("[REPORT-V2] Error fetching end value from shift_results for scale {} shift {} date {}: {}", 
+                    scaleId, shiftId, shiftDate, e.getMessage());
+        }
+        return null;
+    }
+    
+    /**
+     * Convert data values with special handling for data_1 (ABS of end - start)
+     * data_1: Calculate as ABS(end_value - start_value) for the period
+     * data_2-5: Use aggregated values from V1 (AVG by default)
+     */
+    private Map<String, IntervalReportResponseDtoV2.DataFieldValue> convertDataValuesWithAbs(
+            Map<String, IntervalReportResponseDto.DataFieldValue> v1Values,
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> startValues,
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> endValues,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
+        
+        Map<String, IntervalReportResponseDtoV2.DataFieldValue> result = new HashMap<>();
+        
+        for (int i = 1; i <= 5; i++) {
+            String key = "data_" + i;
+            IntervalReportResponseDto.DataFieldValue v1Value = v1Values.get(key);
+            IntervalReportResponseDtoV2.DataFieldInfo fieldInfo = dataFieldNames.get(key);
+            
+            String value;
+            if (i == 1) {
+                // data_1: Calculate ABS(end - start)
+                IntervalReportResponseDtoV2.DataFieldValue startValue = startValues.get(key);
+                IntervalReportResponseDtoV2.DataFieldValue endValue = endValues.get(key);
+                
+                try {
+                    double start = startValue != null ? Double.parseDouble(startValue.getValue()) : 0;
+                    double end = endValue != null ? Double.parseDouble(endValue.getValue()) : 0;
+                    value = String.format("%.2f", Math.abs(end - start));
+                } catch (NumberFormatException e) {
+                    log.warn("Failed to parse data_1 values for ABS calculation: {}", e.getMessage());
+                    value = v1Value != null ? v1Value.getValue() : "0";
+                }
+            } else {
+                // data_2-5: Use aggregated value from V1 (AVG)
+                value = v1Value != null ? v1Value.getValue() : "0";
+            }
+            
+            result.put(key, IntervalReportResponseDtoV2.DataFieldValue.builder()
+                    .value(value)
+                    .name(v1Value != null ? v1Value.getName() : "Data " + i)
+                    .unit(fieldInfo != null ? fieldInfo.getUnit() : "")
+                    .used(v1Value != null && v1Value.isUsed())
+                    .build());
+        }
+        
+        return result;
     }
 
     private IntervalReportResponseDtoV2.RatioValue calculateRatio(
@@ -516,6 +709,68 @@ public class ReportServiceImpl implements ReportService {
         }
         
         return overview;
+    }
+    
+    /**
+     * Calculate dataFieldSummaries - aggregate across all rows after statistics
+     * data_1: SUM of all data_1 values
+     * data_2-5: AVG of all data_2-5 values
+     */
+    private Map<String, IntervalReportResponseDtoV2.DataFieldSummary> calculateDataFieldSummaries(
+            List<IntervalReportResponseDtoV2.Row> v2Rows,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
+        
+        Map<String, IntervalReportResponseDtoV2.DataFieldSummary> summaries = new HashMap<>();
+        
+        if (v2Rows.isEmpty()) return summaries;
+        
+        // Get sample row for metadata
+        IntervalReportResponseDtoV2.Row sampleRow = v2Rows.get(0);
+        
+        for (int i = 1; i <= 5; i++) {
+            String dataKey = "data_" + i;
+            IntervalReportResponseDtoV2.DataFieldValue sampleField = sampleRow.getDataValues().get(dataKey);
+            
+            if (sampleField != null && sampleField.isUsed()) {
+                double totalValue = 0;
+                int count = 0;
+                
+                // Sum up all values from all rows
+                for (IntervalReportResponseDtoV2.Row row : v2Rows) {
+                    IntervalReportResponseDtoV2.DataFieldValue field = row.getDataValues().get(dataKey);
+                    if (field != null) {
+                        try {
+                            totalValue += Double.parseDouble(field.getValue());
+                            count++;
+                        } catch (NumberFormatException e) {
+                            // Skip non-numeric values
+                        }
+                    }
+                }
+                
+                // data_1 uses SUM, data_2-5 use AVG
+                String aggregation;
+                String value;
+                if (i == 1) {
+                    aggregation = "SUM";
+                    value = String.format("%.2f", totalValue);
+                } else {
+                    aggregation = "AVG";
+                    value = count > 0 ? String.format("%.2f", totalValue / count) : "0";
+                }
+                
+                IntervalReportResponseDtoV2.DataFieldInfo fieldInfo = dataFieldNames.get(dataKey);
+                summaries.put(dataKey, IntervalReportResponseDtoV2.DataFieldSummary.builder()
+                        .value(value)
+                        .aggregation(aggregation)
+                        .name(sampleField.getName())
+                        .unit(fieldInfo != null ? fieldInfo.getUnit() : "")
+                        .used(true)
+                        .build());
+            }
+        }
+        
+        return summaries;
     }
     
     /**
@@ -704,6 +959,22 @@ public class ReportServiceImpl implements ReportService {
         } catch (Exception e) {
             log.warn("Failed to parse period '{}' for interval {}: {}", period, interval, e.getMessage());
             return new String[]{period, period};
+        }
+    }
+    
+    /**
+     * Parse time string to OffsetDateTime
+     * @param timeString Time string in format "yyyy-MM-dd HH:mm:ss"
+     * @return OffsetDateTime
+     */
+    private OffsetDateTime parseTimeString(String timeString) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            LocalDateTime localDateTime = LocalDateTime.parse(timeString, formatter);
+            return localDateTime.atZone(ZoneId.systemDefault()).toOffsetDateTime();
+        } catch (Exception e) {
+            log.warn("Failed to parse time string '{}': {}", timeString, e.getMessage());
+            return OffsetDateTime.now();
         }
     }
 
@@ -1017,23 +1288,23 @@ public class ReportServiceImpl implements ReportService {
 
         switch (request.getInterval()) {
             case HOUR -> {
-                timeSelect = "DATE_TRUNC('hour', wl.created_at) as bucket_time, TO_CHAR(DATE_TRUNC('hour', wl.created_at), 'YYYY-MM-DD HH24:00') as period";
-                timeGroupBy = "DATE_TRUNC('hour', wl.created_at)";
+                timeSelect = "DATE_TRUNC('hour', wl.last_time) as bucket_time, TO_CHAR(DATE_TRUNC('hour', wl.last_time), 'YYYY-MM-DD HH24:00') as period";
+                timeGroupBy = "DATE_TRUNC('hour', wl.last_time)";
                 timeOrderBy = "bucket_time";
             }
             case DAY -> {
-                timeSelect = "DATE_TRUNC('day', wl.created_at) as bucket_time, TO_CHAR(DATE_TRUNC('day', wl.created_at), 'YYYY-MM-DD') as period";
-                timeGroupBy = "DATE_TRUNC('day', wl.created_at)";
+                timeSelect = "DATE_TRUNC('day', wl.last_time) as bucket_time, TO_CHAR(DATE_TRUNC('day', wl.last_time), 'YYYY-MM-DD') as period";
+                timeGroupBy = "DATE_TRUNC('day', wl.last_time)";
                 timeOrderBy = "bucket_time";
             }
             case WEEK -> {
-                timeSelect = "DATE_TRUNC('week', wl.created_at) as bucket_time, TO_CHAR(DATE_TRUNC('week', wl.created_at), 'YYYY-MM-DD') as period";
-                timeGroupBy = "DATE_TRUNC('week', wl.created_at)";
+                timeSelect = "DATE_TRUNC('week', wl.last_time) as bucket_time, TO_CHAR(DATE_TRUNC('week', wl.last_time), 'YYYY-MM-DD') as period";
+                timeGroupBy = "DATE_TRUNC('week', wl.last_time)";
                 timeOrderBy = "bucket_time";
             }
             case SHIFT -> {
-                timeSelect = "DATE(wl.created_at) as bucket_date, COALESCE(sh.code, 'NO_SHIFT') as shift_code, (TO_CHAR(DATE(wl.created_at), 'YYYY-MM-DD') || ' ' || COALESCE(sh.code, 'NO_SHIFT')) as period";
-                timeGroupBy = "DATE(wl.created_at), COALESCE(sh.code, 'NO_SHIFT')";
+                timeSelect = "DATE(wl.last_time) as bucket_date, COALESCE(sh.code, 'NO_SHIFT') as shift_code, sh.id as shift_id, sh.name as shift_name, (TO_CHAR(DATE(wl.last_time), 'YYYY-MM-DD') || ' ' || COALESCE(sh.code, 'NO_SHIFT')) as period";
+                timeGroupBy = "DATE(wl.last_time), COALESCE(sh.code, 'NO_SHIFT'), sh.id, sh.name";
                 timeOrderBy = "bucket_date, shift_code";
             }
             default -> throw new IllegalArgumentException("Unsupported interval: " + request.getInterval());
@@ -1071,7 +1342,7 @@ public class ReportServiceImpl implements ReportService {
                 JOIN scales s ON wl.scale_id = s.id
                 %s
                 WHERE wl.scale_id IN (%s)
-                    AND wl.created_at BETWEEN '%s' AND '%s'%s
+                    AND wl.last_time BETWEEN '%s' AND '%s'%s
                 GROUP BY %s
                 ORDER BY %s
                 """,
@@ -1192,10 +1463,10 @@ public class ReportServiceImpl implements ReportService {
         boolean isShift = request.getInterval() == IntervalReportRequestDto.TimeInterval.SHIFT;
 
         switch (request.getInterval()) {
-            case HOUR -> timeGroupBy = "DATE_TRUNC('hour', wl.created_at)";
-            case DAY -> timeGroupBy = "DATE_TRUNC('day', wl.created_at)";
-            case WEEK -> timeGroupBy = "DATE_TRUNC('week', wl.created_at)";
-            case SHIFT -> timeGroupBy = "DATE(wl.created_at), COALESCE(sh.code, 'NO_SHIFT')";
+            case HOUR -> timeGroupBy = "DATE_TRUNC('hour', wl.last_time)";
+            case DAY -> timeGroupBy = "DATE_TRUNC('day', wl.last_time)";
+            case WEEK -> timeGroupBy = "DATE_TRUNC('week', wl.last_time)";
+            case SHIFT -> timeGroupBy = "DATE(wl.last_time), COALESCE(sh.code, 'NO_SHIFT')";
             default -> throw new IllegalArgumentException("Unsupported interval: " + request.getInterval());
         }
 
@@ -1221,7 +1492,7 @@ public class ReportServiceImpl implements ReportService {
                     JOIN scales s ON wl.scale_id = s.id
                     %s
                     WHERE wl.scale_id IN (%s)
-                        AND wl.created_at BETWEEN '%s' AND '%s'%s
+                        AND wl.last_time BETWEEN '%s' AND '%s'%s
                     GROUP BY %s
                 ) as subquery
                 """,
@@ -1277,11 +1548,26 @@ public class ReportServiceImpl implements ReportService {
                         .name(Objects.toString(row.get("scale_name"), null))
                         .build();
             }
+            
+            // Extract shift info if available (for SHIFT interval)
+            IntervalReportResponseDto.ShiftInfo shiftInfo = null;
+            Object shiftIdObj = row.get("shift_id");
+            if (shiftIdObj != null) {
+                Long shiftId = shiftIdObj instanceof Number ? ((Number) shiftIdObj).longValue() : null;
+                if (shiftId != null) {
+                    shiftInfo = IntervalReportResponseDto.ShiftInfo.builder()
+                            .id(shiftId)
+                            .code(Objects.toString(row.get("shift_code"), null))
+                            .name(Objects.toString(row.get("shift_name"), null))
+                            .build();
+                }
+            }
 
             rows.add(IntervalReportResponseDto.Row.builder()
                     .scale(scaleInfo)
                     .period(Objects.toString(row.get("period"), null))
                     .recordCount(row.get("record_count") != null ? ((Number) row.get("record_count")).intValue() : null)
+                    .shift(shiftInfo)
                     .dataValues(dataValues)
                     .build());
         }
@@ -1379,12 +1665,12 @@ public class ReportServiceImpl implements ReportService {
 
         return String.format("""
                 SELECT
-                    TO_CHAR(DATE_TRUNC('%s', created_at), 'YYYY-MM-DD HH24:MI') as time_bucket,
+                    TO_CHAR(DATE_TRUNC('%s', last_time), 'YYYY-MM-DD HH24:MI') as time_bucket,
                     %s as aggregated_value
                 FROM weighing_logs
                 WHERE scale_id IN (%s)
-                    AND created_at BETWEEN '%s 00:00:00+00' AND '%s 23:59:59+00'
-                GROUP BY DATE_TRUNC('%s', created_at)
+                    AND last_time BETWEEN '%s 00:00:00+00' AND '%s 23:59:59+00'
+                GROUP BY DATE_TRUNC('%s', last_time)
                 ORDER BY time_bucket
                 """,
                 dateTruncParam,

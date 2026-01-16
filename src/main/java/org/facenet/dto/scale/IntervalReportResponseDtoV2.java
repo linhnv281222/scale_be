@@ -50,6 +50,16 @@ public class IntervalReportResponseDtoV2 {
      * - data_2..data_5: AVG
      */
     private Map<String, Map<String, OverviewStats>> overview;
+    
+    /**
+     * Summary of data fields after statistics calculation.
+     * Aggregates results from all rows:
+     * - data_1: SUM of all data_1 values after statistics
+     * - data_2-5: AVG of all data_2-5 values after statistics
+     * Returns value with unit and field name.
+     */
+    @JsonProperty("dataFieldSummaries")
+    private Map<String, DataFieldSummary> dataFieldSummaries;
 
     private List<Row> rows;
 
@@ -153,6 +163,43 @@ public class IntervalReportResponseDtoV2 {
         private String name;
         private String unit;
 
+        @JsonProperty("used")
+        private boolean used;
+    }
+    
+    /**
+     * Summary statistics for a single data field after all statistics are calculated.
+     * Contains aggregated value (SUM for data_1, AVG for data_2-5), name, and unit.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class DataFieldSummary {
+        /**
+         * Aggregated value: SUM for data_1, AVG for data_2-5
+         */
+        private String value;
+        
+        /**
+         * Aggregation method used: "SUM" or "AVG"
+         */
+        private String aggregation;
+        
+        /**
+         * Field display name (e.g., "Weight", "Temperature")
+         */
+        private String name;
+        
+        /**
+         * Unit of measurement (e.g., "kg", "°C")
+         */
+        private String unit;
+        
+        /**
+         * Whether this field is used/enabled
+         */
         @JsonProperty("used")
         private boolean used;
     }

@@ -1402,6 +1402,10 @@ public class ReportExportService {
         Map<String, ReportData.DirectionSummary> directionSummariesMap = 
                 calculateDirectionSummaries(reportData, reportRows);
         
+        // Convert dataFieldSummaries from V2 to ReportData
+        Map<String, ReportData.DataFieldSummary> dataFieldSummaries = 
+                convertDataFieldSummaries(reportData);
+        
         log.info("Direction summaries map keys: {}", directionSummariesMap.keySet());
         if (directionSummariesMap.get("1") != null) {
             log.info("Import summary: totalScales={}, totalRecords={}, data1Total={}", 
@@ -1430,10 +1434,41 @@ public class ReportExportService {
                 .data5Name(data5Name)
                 .rows(reportRows)
                 .summary(summary)
+                .dataFieldSummaries(dataFieldSummaries)
                 .unknownSummaries(directionSummariesMap.get("0"))
                 .importSummaries(directionSummariesMap.get("1"))
                 .exportSummaries(directionSummariesMap.get("2"))
                 .build();
+    }
+    
+    /**
+     * Convert dataFieldSummaries from IntervalReportResponseDtoV2 to ReportData format
+     */
+    private Map<String, ReportData.DataFieldSummary> convertDataFieldSummaries(
+            IntervalReportResponseDtoV2 reportData) {
+        
+        if (reportData == null || reportData.getDataFieldSummaries() == null) {
+            return new HashMap<>();
+        }
+        
+        Map<String, ReportData.DataFieldSummary> result = new HashMap<>();
+        
+        for (Map.Entry<String, IntervalReportResponseDtoV2.DataFieldSummary> entry : 
+                reportData.getDataFieldSummaries().entrySet()) {
+            
+            String key = entry.getKey();
+            IntervalReportResponseDtoV2.DataFieldSummary v2Summary = entry.getValue();
+            
+            result.put(key, ReportData.DataFieldSummary.builder()
+                    .value(parseDouble(v2Summary.getValue()))
+                    .aggregation(v2Summary.getAggregation())
+                    .name(v2Summary.getName())
+                    .unit(v2Summary.getUnit())
+                    .used(v2Summary.isUsed())
+                    .build());
+        }
+        
+        return result;
     }
     
     /**

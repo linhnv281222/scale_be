@@ -66,6 +66,11 @@ public class ShiftDetectionService {
      * Check if a given time falls within a shift's time range
      * Handles both same-day shifts (e.g., 08:00-16:00) and overnight shifts (e.g., 22:00-06:00)
      * 
+     * Examples:
+     * - Same-day shift (08:00-16:00): time 10:00 -> IN, time 17:00 -> OUT
+     * - Overnight shift (22:00-06:00): time 23:00 -> IN, time 02:00 -> IN, time 07:00 -> OUT
+     * - Overnight shift (18:30-07:30): time 19:00 -> IN, time 03:00 -> IN, time 08:00 -> OUT
+     * 
      * @param time The time to check
      * @param shift The shift with start and end times
      * @return true if time is within shift range
@@ -75,20 +80,28 @@ public class ShiftDetectionService {
         LocalTime endTime = shift.getEndTime();
 
         if (startTime == null || endTime == null) {
-            log.warn("Shift {} has null start or end time", shift.getCode());
+            log.warn("[SHIFT-DETECT] Shift {} has null start or end time", shift.getCode());
             return false;
         }
 
         // Case 1: Same-day shift (start < end)
         // Example: 08:00 - 16:00
+        // Valid range: [08:00, 16:00)
         if (startTime.isBefore(endTime)) {
-            return !time.isBefore(startTime) && time.isBefore(endTime);
+            boolean isInRange = !time.isBefore(startTime) && time.isBefore(endTime);
+            log.trace("[SHIFT-DETECT] Same-day shift check: time={}, start={}, end={}, result={}", 
+                    time, startTime, endTime, isInRange);
+            return isInRange;
         }
         
         // Case 2: Overnight shift (start >= end)
         // Example: 22:00 - 06:00 (crosses midnight)
+        // Valid range: [22:00, 23:59:59] OR [00:00, 06:00)
         // Time is in shift if: time >= 22:00 OR time < 06:00
-        return !time.isBefore(startTime) || time.isBefore(endTime);
+        boolean isInRange = !time.isBefore(startTime) || time.isBefore(endTime);
+        log.trace("[SHIFT-DETECT] Overnight shift check: time={}, start={}, end={}, result={}", 
+                time, startTime, endTime, isInRange);
+        return isInRange;
     }
 
     /**

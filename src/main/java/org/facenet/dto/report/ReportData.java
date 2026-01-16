@@ -39,6 +39,11 @@ public class ReportData {
     private String data3Name;
     private String data4Name;
     private String data5Name;
+    
+    // Data field summaries after statistics (for interval/v2)
+    // Key: field name (data_1, data_2, etc.)
+    // Value: DataFieldSummary containing aggregated value, aggregation method, name, and unit
+    private Map<String, DataFieldSummary> dataFieldSummaries;
 
     @Data
     @NoArgsConstructor
@@ -130,5 +135,40 @@ public class ReportData {
         private Double data3Average;
         private Double data4Average;
         private Double data5Average;
+    }
+    
+    /**
+     * Summary statistics for a single data field after all statistics are calculated
+     * Used in interval/v2 reports for aggregating data across all rows
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class DataFieldSummary {
+        /**
+         * Aggregated value: SUM for data_1, AVG for data_2-5
+         */
+        private Double value;
+        
+        /**
+         * Aggregation method used: "SUM" or "AVG"
+         */
+        private String aggregation;
+        
+        /**
+         * Field display name (e.g., "Weight", "Temperature")
+         */
+        private String name;
+        
+        /**
+         * Unit of measurement (e.g., "kg", "°C")
+         */
+        private String unit;
+        
+        /**
+         * Whether this field is used/enabled
+         */
+        private Boolean used;
     }
 }

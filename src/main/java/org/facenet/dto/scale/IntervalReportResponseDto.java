@@ -44,6 +44,10 @@ public class IntervalReportResponseDto {
         private ScaleInfo scale;
         private String period;
         private Integer recordCount;
+        
+        @JsonProperty("shift")
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private ShiftInfo shift;
 
         /**
          * Per-field values keyed by data_1..data_5.
@@ -109,5 +113,16 @@ public class IntervalReportResponseDto {
 
         @JsonProperty("parent_id")
         private Long parentId;
+    }
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class ShiftInfo {
+        private Long id;
+        private String code;
+        private String name;
     }
 }
