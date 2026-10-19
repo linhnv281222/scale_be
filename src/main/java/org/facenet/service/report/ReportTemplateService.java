@@ -1230,7 +1230,7 @@ public class ReportTemplateService {
                     .name(request.getTemplateName())
                     .description(request.getDescription())
                     .titleTemplate(request.getTitleTemplate())
-                    .reportType(ReportTemplate.ReportType.WORD)
+                    .reportType(detectReportType(file.getOriginalFilename()))
                     .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                     .isDefault(false)
                     .build();
@@ -1497,6 +1497,15 @@ public class ReportTemplateService {
             log.warn("Unknown template type: {}, setting to null", templateType);
         }
         return type;
+    }
+
+    private ReportTemplate.ReportType detectReportType(String filename) {
+        String value = filename == null ? "" : filename.toLowerCase(java.util.Locale.ROOT);
+        if (value.endsWith(".xlsx") || value.endsWith(".xls")) return ReportTemplate.ReportType.EXCEL;
+        if (value.endsWith(".pdf") || value.endsWith(".html") || value.endsWith(".htm")) {
+            return ReportTemplate.ReportType.PDF;
+        }
+        return ReportTemplate.ReportType.WORD;
     }
 
     public record TemplateFileRecord(String filename, byte[] content, String fileHash) {}

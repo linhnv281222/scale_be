@@ -54,7 +54,7 @@ public class ScaleMonitoringService {
     /**
      * Broadcast scale summary mỗi 5 giây
      */
-    @Scheduled(fixedRate = 50000)
+    @Scheduled(fixedRateString = "${dashboard.websocket.summary-rate-ms:5000}")
     public void broadcastScaleSummary() {
         try {
             ScaleSummaryEvent summary = buildScaleSummary();
@@ -72,7 +72,7 @@ public class ScaleMonitoringService {
     /**
      * Broadcast toàn bộ dữ liệu của tất cả các cân mỗi 2 giây
      */
-    @Scheduled(fixedRate = 180000)
+    @Scheduled(fixedRateString = "${dashboard.websocket.scales-rate-ms:2000}")
     public void broadcastAllScalesData() {
         try {
             AllScalesDataEvent allData = buildAllScalesData();

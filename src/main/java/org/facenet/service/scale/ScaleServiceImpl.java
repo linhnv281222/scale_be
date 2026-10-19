@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.facenet.common.exception.ResourceNotFoundException;
+import org.facenet.common.exception.ValidationException;
 import org.facenet.common.pagination.PageRequestDto;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.common.specification.GenericSpecification;
@@ -23,6 +24,7 @@ import org.facenet.repository.manufacturer.ScaleManufacturerRepository;
 import org.facenet.repository.protocol.ProtocolRepository;
 import org.facenet.repository.scale.ScaleConfigRepository;
 import org.facenet.repository.scale.ScaleRepository;
+import org.facenet.service.scale.engine.util.ScaleConfigSchema;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -33,6 +35,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,6 +57,7 @@ public class ScaleServiceImpl implements ScaleService {
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
+    private final ScaleConfigAuditService scaleConfigAuditService;
 
     @Override
     public PageResponseDto<ScaleDto.Response> getAllScales(PageRequestDto pageRequest, Map<String, String> filters) {
@@ -196,6 +201,8 @@ public class ScaleServiceImpl implements ScaleService {
                     .orElseThrow(() -> new ResourceNotFoundException("Protocol", "id", request.getProtocolId()));
         }
 
+        Map<String, Object> beforeConfig = scaleConfigAuditService.snapshot(scale.getConfig());
+
         scale.setName(request.getName());
         scale.setLocation(location);
         scale.setManufacturer(manufacturer);
@@ -207,7 +214,7 @@ public class ScaleServiceImpl implements ScaleService {
         scale = scaleRepository.save(scale);
         
         // Update config with data from request
-        updateScaleConfig(scale, request);
+        updateScaleConfig(scale, request, beforeConfig);
         
         // Publish event
         eventPublisher.publishEvent(new ConfigChangedEvent(this, scale.getId(), "SCALE_UPDATE"));
@@ -239,12 +246,18 @@ public class ScaleServiceImpl implements ScaleService {
             String protocol = request.getProtocol() != null ? request.getProtocol() : "MODBUS_TCP";
             Integer pollInterval = request.getPollInterval() != null ? request.getPollInterval() : 1000;
             
-            Map<String, Object> connParams = request.getConnParams() != null ? request.getConnParams() : createDefaultConnParams();
-            Map<String, Object> data1 = request.getData1() != null ? request.getData1() : createDefaultData1();
-            Map<String, Object> data2 = request.getData2() != null ? request.getData2() : Map.of("is_used", false);
-            Map<String, Object> data3 = request.getData3() != null ? request.getData3() : Map.of("is_used", false);
-            Map<String, Object> data4 = request.getData4() != null ? request.getData4() : Map.of("is_used", false);
-            Map<String, Object> data5 = request.getData5() != null ? request.getData5() : Map.of("is_used", false);
+            Map<String, Object> connParams = ScaleConfigSchema.normalizeConnection(protocol,
+                    request.getConnParams() != null ? request.getConnParams() : createDefaultConnParams());
+            Map<String, Object> data1 = ScaleConfigSchema.normalizeDataField(protocol,
+                    request.getData1() != null ? request.getData1() : createDefaultData1());
+            Map<String, Object> data2 = ScaleConfigSchema.normalizeDataField(protocol,
+                    request.getData2() != null ? request.getData2() : Map.of("is_used", false));
+            Map<String, Object> data3 = ScaleConfigSchema.normalizeDataField(protocol,
+                    request.getData3() != null ? request.getData3() : Map.of("is_used", false));
+            Map<String, Object> data4 = ScaleConfigSchema.normalizeDataField(protocol,
+                    request.getData4() != null ? request.getData4() : Map.of("is_used", false));
+            Map<String, Object> data5 = ScaleConfigSchema.normalizeDataField(protocol,
+                    request.getData5() != null ? request.getData5() : Map.of("is_used", false));
 
             ScaleConfig config = ScaleConfig.builder()
                     .scale(scale)
@@ -258,27 +271,32 @@ public class ScaleServiceImpl implements ScaleService {
                     .data5(data5)
                     .build();
 
-            scaleConfigRepository.save(config);
+            config = scaleConfigRepository.save(config);
+            scaleConfigAuditService.record(scale.getId(), "CREATE", null,
+                    scaleConfigAuditService.snapshot(config));
+        } catch (ValidationException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to create scale config", e);
         }
     }
 
-    private void updateScaleConfig(Scale scale, ScaleDto.Request request) {
+    private void updateScaleConfig(Scale scale, ScaleDto.Request request, Map<String, Object> beforeConfig) {
         try {
             // Convert Maps to JSON strings for native query
-            String connParamsJson = request.getConnParams() != null ? 
-                objectMapper.writeValueAsString(request.getConnParams()) : null;
-            String data1Json = request.getData1() != null ? 
-                objectMapper.writeValueAsString(request.getData1()) : null;
+            String connParamsJson = request.getConnParams() != null ?
+                objectMapper.writeValueAsString(
+                        ScaleConfigSchema.normalizeConnection(request.getProtocol(), request.getConnParams())) : null;
+            String data1Json = request.getData1() != null ?
+                objectMapper.writeValueAsString(ScaleConfigSchema.normalizeDataField(request.getProtocol(), request.getData1())) : null;
             String data2Json = request.getData2() != null ? 
-                objectMapper.writeValueAsString(request.getData2()) : null;
+                objectMapper.writeValueAsString(ScaleConfigSchema.normalizeDataField(request.getProtocol(), request.getData2())) : null;
             String data3Json = request.getData3() != null ? 
-                objectMapper.writeValueAsString(request.getData3()) : null;
+                objectMapper.writeValueAsString(ScaleConfigSchema.normalizeDataField(request.getProtocol(), request.getData3())) : null;
             String data4Json = request.getData4() != null ? 
-                objectMapper.writeValueAsString(request.getData4()) : null;
+                objectMapper.writeValueAsString(ScaleConfigSchema.normalizeDataField(request.getProtocol(), request.getData4())) : null;
             String data5Json = request.getData5() != null ? 
-                objectMapper.writeValueAsString(request.getData5()) : null;
+                objectMapper.writeValueAsString(ScaleConfigSchema.normalizeDataField(request.getProtocol(), request.getData5())) : null;
 
             // Use native query to update - bypasses @MapsId issues
             int updatedRows = scaleConfigRepository.updateScaleConfig(
@@ -291,7 +309,7 @@ public class ScaleServiceImpl implements ScaleService {
                 data3Json,
                 data4Json,
                 data5Json,
-                "system" // TODO: Get from security context
+                currentUsername()
             );
 
             if (updatedRows == 0) {
@@ -300,6 +318,10 @@ public class ScaleServiceImpl implements ScaleService {
 
             // Clear entity manager cache to ensure fresh data
             entityManager.clear();
+            ScaleConfig refreshed = scaleConfigRepository.findById(scale.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Scale config", "scaleId", scale.getId()));
+            scaleConfigAuditService.record(scale.getId(), "UPDATE", beforeConfig,
+                    scaleConfigAuditService.snapshot(refreshed));
 
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize config data", e);
@@ -320,5 +342,13 @@ public class ScaleServiceImpl implements ScaleService {
         data.put("num_registers", 2);
         data.put("is_used", true);
         return data;
+    }
+
+    private String currentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return "system";
+        }
+        return authentication.getName();
     }
 }

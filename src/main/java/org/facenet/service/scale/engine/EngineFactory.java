@@ -14,6 +14,7 @@ import java.util.concurrent.BlockingQueue;
  * - MODBUS_TCP: Kết nối qua TCP/IP
  * - MODBUS_RTU: Kết nối qua Serial (COM port/RS485)
  * - MODBUS_SBUS: S-Bus protocol (SAIA S-Bus over Serial)
+ * - SABUS: Scale-specific ASCII protocol using FL/NT commands
  * - SERIAL: (Future) Giao thức Serial đơn giản
  */
 @Slf4j
@@ -57,6 +58,16 @@ public class EngineFactory {
             case "S-BUS":
             case "S_BUS":
                 return new SbusEngine(config, queue);
+
+            case "SABUS":
+            case "SABUS_ASCII":
+                return new SabusAsciiEngine(config, queue);
+
+            case "SIEMENS_S7":
+            case "SIEMENS":
+            case "S7":
+            case "S7_TCP":
+                return new SiemensS7Engine(config, queue);
                 
             case "SERIAL":
                 // TODO: Implement SerialEngine cho giao thức Serial thuần

@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/reports")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_VIEW')")
 public class ScaleReportController {
 
     private final ReportService reportService;
@@ -95,7 +96,7 @@ public class ScaleReportController {
      * Manually trigger daily aggregation (for testing/admin)
      */
     @PostMapping("/aggregate-daily")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> aggregateDailyData() {
 
         log.info("[REPORT-API] Manually triggering daily aggregation");

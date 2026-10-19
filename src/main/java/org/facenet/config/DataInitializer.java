@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.entity.rbac.Permission;
 import org.facenet.entity.rbac.Role;
 import org.facenet.entity.rbac.User;
+import org.facenet.entity.protocol.Protocol;
+import org.facenet.repository.protocol.ProtocolRepository;
 import org.facenet.repository.rbac.PermissionRepository;
 import org.facenet.repository.rbac.RoleRepository;
 import org.facenet.repository.rbac.UserRepository;
@@ -27,12 +29,15 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
+    private final ProtocolRepository protocolRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional
     public void run(String... args) throws Exception {
+        ensureSabusProtocol();
         if (userRepository.count() > 0) {
+            ensureFeatureRbac();
             log.info("Data already initialized, skipping...");
             return;
         }
@@ -97,6 +102,8 @@ public class DataInitializer implements CommandLineRunner {
                 .build();
         userRepository.save(operator);
 
+        ensureFeatureRbac();
+
         log.info("Default data initialized successfully!");
         log.info("Default users created:");
         log.info("  - admin/admin123 (ADMIN role)");
@@ -110,5 +117,82 @@ public class DataInitializer implements CommandLineRunner {
                 .description(description)
                 .build();
         return permissionRepository.save(permission);
+    }
+
+    private void ensureFeatureRbac() {
+        Permission dashboardView = ensurePermission("DASHBOARD_VIEW", "View operations dashboard");
+        Permission reportView = ensurePermission("REPORT_VIEW", "Search and view reports");
+        Permission reportExport = ensurePermission("REPORT_EXPORT", "Export report data");
+        Permission configManage = ensurePermission("CONFIG_MANAGE", "Manage sensitive device configuration");
+        Permission auditView = ensurePermission("AUDIT_VIEW", "View configuration audit history");
+        Permission scaleView = ensurePermission("SCALE_VIEW", "View scales");
+
+        grant("ADMIN", dashboardView, reportView, reportExport, configManage, auditView, scaleView);
+        grant("MANAGER", dashboardView, reportView, reportExport, auditView, scaleView);
+        grant("OPERATOR", dashboardView, reportView, scaleView);
+
+        Role supervisor = ensureRole("SUPERVISOR", "Supervisor");
+        supervisor.getPermissions().addAll(Set.of(dashboardView, reportView, reportExport, auditView, scaleView));
+        roleRepository.save(supervisor);
+
+        Role guest = ensureRole("GUEST", "Guest");
+        guest.getPermissions().addAll(Set.of(dashboardView, reportView, scaleView));
+        roleRepository.save(guest);
+    }
+
+    private Permission ensurePermission(String code, String description) {
+        return permissionRepository.findByCode(code).orElseGet(() -> permissionRepository.save(
+                Permission.builder().code(code).description(description).isActive(true).build()));
+    }
+
+    private Role ensureRole(String code, String name) {
+        return roleRepository.findByCode(code).orElseGet(() -> roleRepository.save(
+                Role.builder().code(code).name(name).isActive(true).permissions(new HashSet<>()).build()));
+    }
+
+    private void grant(String roleCode, Permission... permissions) {
+        roleRepository.findByCode(roleCode).ifPresent(role -> {
+            role.getPermissions().addAll(Set.of(permissions));
+            roleRepository.save(role);
+        });
+    }
+
+    private void ensureSabusProtocol() {
+        Protocol protocol = protocolRepository.findByCode("SABUS").orElseGet(Protocol::new);
+        protocol.setCode("SABUS");
+        protocol.setName("SABUS ASCII");
+        protocol.setDescription("Serial scale protocol using ![ID]FL[CR] and ![ID]NT[CR] commands");
+        protocol.setConnectionType("SERIAL");
+        protocol.setDefaultBaudRate(9600);
+        protocol.setIsActive(true);
+        protocol.setConfigTemplate("""
+                {
+                  "conn_params": {
+                    "com_port": "COM1",
+                    "baud_rate": 9600,
+                    "data_bits": 8,
+                    "stop_bits": 1,
+                    "parity": "NONE",
+                    "device_id": "01",
+                    "device_id_width": 2,
+                    "response_timeout_ms": 3000,
+                    "reconnect_delay_ms": 5000,
+                    "offline_threshold_ms": 60000,
+                    "command_prefix": "!",
+                    "command_terminator": "\\r"
+                  },
+                  "data_1": {
+                    "name": "Instantaneous Flow",
+                    "command": "FL",
+                    "is_used": true
+                  },
+                  "data_2": {
+                    "name": "Accumulated Total",
+                    "command": "NT",
+                    "is_used": true
+                  }
+                }
+                """);
+        protocolRepository.save(protocol);
     }
 }

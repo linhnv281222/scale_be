@@ -30,7 +30,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 
 # Copy JAR from builder stage
-COPY --from=builder /app/target/*.jar app.jar
+COPY --from=builder /app/target/ScaleHubIOT-1.0-SNAPSHOT.jar app.jar
 
 # Create directories for logs and dead letters
 RUN mkdir -p /app/logs /app/dead-letters && \

@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.common.pagination.PageResponseDto;
 import org.facenet.dto.report.IntervalReportExportRequestV2;
 import org.facenet.dto.report.ReportData;
+import org.facenet.dto.report.ReportDesignerDto;
 import org.facenet.dto.report.ReportExportRequest;
 import org.facenet.dto.scale.IntervalReportRequestDtoV2;
 import org.facenet.dto.scale.IntervalReportResponseDtoV2;
@@ -30,8 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -128,7 +128,7 @@ public class ReportExportService {
 
         // 5. Route to appropriate export method based on file type
         return switch (fileType) {
-            case WORD -> exportWordTemplate(templateFile, reportData);
+            case WORD -> exportWordTemplate(templateFile, reportData, template);
             case PDF_HTML -> exportPdfTemplate(templateFile, reportData);
             case EXCEL -> exportExcelTemplate(templateFile, reportData, template);
             default -> throw new RuntimeException("Unsupported template file type: " + filename);
@@ -152,11 +152,11 @@ public class ReportExportService {
     /**
      * Export using Word template (.docx)
      */
-    private byte[] exportWordTemplate(byte[] templateFile, ReportData reportData) throws IOException {
+    private byte[] exportWordTemplate(byte[] templateFile, ReportData reportData, ReportTemplate template) throws IOException {
         log.info("Exporting Word template with direct table insertion");
         
         // Prepare data model for template
-        Map<String, Object> dataModel = prepareDataModelForTemplate(reportData);
+        Map<String, Object> dataModel = prepareDataModelForTemplate(reportData, template);
         
         // Log detailed data model info for debugging
         log.info("Data model prepared - rows count: {}", 
@@ -356,14 +356,18 @@ public class ReportExportService {
         log.info("Exporting Excel template with data insertion");
         
         try (ByteArrayInputStream templateStream = new ByteArrayInputStream(templateFile);
-             org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = 
-                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(templateStream)) {
+             org.apache.poi.ss.usermodel.Workbook workbook =
+                     org.apache.poi.ss.usermodel.WorkbookFactory.create(templateStream)) {
             
-            // Get first sheet (assuming template uses first sheet)
-            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            ReportDesignerDto.TemplateMapping mapping = ReportDesignerService.readMapping(template);
+            org.apache.poi.ss.usermodel.Sheet sheet = mapping.getSheetName() == null
+                    ? workbook.getSheetAt(0) : workbook.getSheet(mapping.getSheetName());
+            if (sheet == null) {
+                throw new IllegalArgumentException("Configured Excel sheet not found: " + mapping.getSheetName());
+            }
             
             // Prepare data model
-            Map<String, Object> dataModel = prepareDataModelForTemplate(reportData);
+            Map<String, Object> dataModel = prepareDataModelForTemplate(reportData, template);
             log.info("Data model prepared with keys: {}", dataModel.keySet());
             log.info("Sample values - organizationName: {}", dataModel.get("organizationName"));
             log.info("Sample values - reportTitle: {}", dataModel.get("reportTitle"));
@@ -374,7 +378,7 @@ public class ReportExportService {
             // This is important because shiftRows can destroy placeholder replacements
             List<?> rowsList = dataModel.get("rows") instanceof List ? (List<?>) dataModel.get("rows") : null;
             if (rowsList != null && !rowsList.isEmpty()) {
-                insertDataIntoExcelTable(sheet, rowsList);
+                insertDataIntoExcelTable(sheet, rowsList, mapping);
             } else {
                 log.warn("No rows data to insert into Excel table");
             }
@@ -426,7 +430,7 @@ public class ReportExportService {
                 }
                 
                 String cellValue = cell.getStringCellValue();
-                if (cellValue == null || !cellValue.contains("{{")) {
+                if (cellValue == null || (!cellValue.contains("{{") && !cellValue.contains("["))) {
                     continue;
                 }
                 
@@ -444,6 +448,12 @@ public class ReportExportService {
                         String replacement = value != null ? value.toString() : "";
                         cellValue = cellValue.replace(placeholder, replacement);
                         log.info("  ✓ Replaced '{}' with: '{}'", placeholder, replacement);
+                        replacedCount++;
+                    }
+                    String bracketPlaceholder = "[" + key + "]";
+                    if (cellValue.contains(bracketPlaceholder)) {
+                        Object value = entry.getValue();
+                        cellValue = cellValue.replace(bracketPlaceholder, value != null ? value.toString() : "");
                         replacedCount++;
                     }
                 }
@@ -486,23 +496,37 @@ public class ReportExportService {
      * Insert data rows into Excel table
      * Assumes: Row with {{rowNumber}} placeholder is the template row
      */
-    private void insertDataIntoExcelTable(org.apache.poi.ss.usermodel.Sheet sheet, List<?> rowsData) {
+    private void insertDataIntoExcelTable(org.apache.poi.ss.usermodel.Sheet sheet, List<?> rowsData,
+                                          ReportDesignerDto.TemplateMapping mapping) {
         log.info("Inserting {} rows into Excel table", rowsData.size());
         
         // Find template row (contains {{rowNumber}} or other row placeholders)
         int templateRowIndex = -1;
         org.apache.poi.ss.usermodel.Row templateRow = null;
         
-        for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+        if (mapping.getDataStartRow() != null) {
+            templateRowIndex = mapping.getDataStartRow();
+            templateRow = sheet.getRow(templateRowIndex);
+            if (templateRow == null) {
+                throw new IllegalArgumentException("Configured Excel data row does not exist: " + templateRowIndex);
+            }
+        } else if (mapping.getHeaderRow() != null) {
+            templateRowIndex = mapping.getHeaderRow() + 1 + valueOrZero(mapping.getRowOffset());
+            templateRow = sheet.getRow(templateRowIndex);
+            if (templateRow == null) {
+                throw new IllegalArgumentException("Configured Excel data row does not exist: " + templateRowIndex);
+            }
+        }
+
+        for (int i = 0; templateRowIndex == -1 && i <= sheet.getLastRowNum(); i++) {
             org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
             if (row == null) continue;
             
             for (org.apache.poi.ss.usermodel.Cell cell : row) {
                 if (cell != null && cell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
                     String cellValue = cell.getStringCellValue();
-                    if (cellValue != null && (cellValue.contains("{{rowNumber}}") || 
-                                             cellValue.contains("{{scaleName}}") ||
-                                             cellValue.contains("{{data1Total}}"))) {
+                    String candidate = extractPlaceholder(cellValue);
+                    if (candidate != null && isDataPlaceholder(candidate, mapping)) {
                         templateRowIndex = i;
                         templateRow = row;
                         break;
@@ -520,7 +544,7 @@ public class ReportExportService {
         log.info("Found template row at index: {}", templateRowIndex);
         
         // Detect column mapping from template row
-        String[] columnKeys = detectExcelColumnKeys(templateRow);
+        String[] columnKeys = detectExcelColumnKeys(templateRow, mapping);
         log.info("Detected Excel column mapping: {}", String.join(", ", columnKeys));
         
         // Insert data rows AFTER template row
@@ -564,8 +588,12 @@ public class ReportExportService {
     /**
      * Detect column keys from Excel template row
      */
-    private String[] detectExcelColumnKeys(org.apache.poi.ss.usermodel.Row templateRow) {
-        int lastCellNum = templateRow.getLastCellNum();
+    private String[] detectExcelColumnKeys(org.apache.poi.ss.usermodel.Row templateRow,
+                                           ReportDesignerDto.TemplateMapping mapping) {
+        int configuredLastColumn = mapping.getColumnMappings().keySet().stream()
+                .mapToInt(value -> Integer.parseInt(value) + valueOrZero(mapping.getColumnOffset()) + 1)
+                .max().orElse(0);
+        int lastCellNum = Math.max(templateRow.getLastCellNum(), configuredLastColumn);
         String[] keys = new String[lastCellNum];
         
         for (int i = 0; i < lastCellNum; i++) {
@@ -584,6 +612,8 @@ public class ReportExportService {
             }
         }
         
+        mapping.getColumnMappings().forEach((column, field) ->
+                keys[Integer.parseInt(column) + valueOrZero(mapping.getColumnOffset())] = field);
         return keys;
     }
 
@@ -680,6 +710,16 @@ public class ReportExportService {
                 }
             }
         }
+        document.getHeaderList().forEach(header -> {
+            header.getParagraphs().forEach(paragraph -> replacePlaceholdersInParagraph(paragraph, dataModel));
+            header.getTables().forEach(table -> table.getRows().forEach(row -> row.getTableCells().forEach(cell ->
+                    cell.getParagraphs().forEach(paragraph -> replacePlaceholdersInParagraph(paragraph, dataModel)))));
+        });
+        document.getFooterList().forEach(footer -> {
+            footer.getParagraphs().forEach(paragraph -> replacePlaceholdersInParagraph(paragraph, dataModel));
+            footer.getTables().forEach(table -> table.getRows().forEach(row -> row.getTableCells().forEach(cell ->
+                    cell.getParagraphs().forEach(paragraph -> replacePlaceholdersInParagraph(paragraph, dataModel)))));
+        });
     }
     
     /**
@@ -688,7 +728,7 @@ public class ReportExportService {
     private void replacePlaceholdersInParagraph(org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph, 
                                                  Map<String, Object> dataModel) {
         String text = paragraph.getText();
-        if (text == null || (!text.contains("{{") && !text.contains("[[LOGO]]"))) return;
+        if (text == null || (!text.contains("{{") && !text.contains("[") && !text.contains("[[LOGO]]"))) return;
         
         // Handle logo placeholder
         if (text.contains("[[LOGO]]")) {
@@ -706,6 +746,11 @@ public class ReportExportService {
                 Object value = entry.getValue();
                 String replacement = value != null ? value.toString() : "";
                 text = text.replace(placeholder, replacement);
+            }
+            String bracketPlaceholder = "[" + key + "]";
+            if (text.contains(bracketPlaceholder)) {
+                Object value = entry.getValue();
+                text = text.replace(bracketPlaceholder, value != null ? value.toString() : "");
             }
         }
         
@@ -909,7 +954,7 @@ public class ReportExportService {
      * Returns the first placeholder found
      */
     private String extractPlaceholder(String text) {
-        if (text == null || !text.contains("{{")) {
+        if (text == null) {
             return null;
         }
         
@@ -918,6 +963,12 @@ public class ReportExportService {
         
         if (start != -1 && end != -1 && end > start + 2) {
             return text.substring(start + 2, end).trim();
+        }
+
+        start = text.indexOf('[');
+        end = text.indexOf(']', start);
+        if (start != -1 && end != -1 && end > start + 1) {
+            return text.substring(start + 1, end).trim();
         }
         
         return null;
@@ -1080,6 +1131,60 @@ public class ReportExportService {
         return model;
     }
 
+    private Map<String, Object> prepareDataModelForTemplate(ReportData reportData, ReportTemplate template) {
+        Map<String, Object> model = prepareDataModelForTemplate(reportData);
+        ReportDesignerDto.TemplateMapping mapping = ReportDesignerService.readMapping(template);
+        if (mapping.getPlaceholderMappings().isEmpty()) return model;
+
+        Object rowsValue = model.get("rows");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = rowsValue instanceof List<?>
+                ? (List<Map<String, Object>>) rowsValue : List.of();
+        mapping.getPlaceholderMappings().forEach((placeholder, source) -> {
+            String alias = normalizePlaceholderName(placeholder);
+            Object topLevelValue = resolveMappedValue(model, source);
+            if (topLevelValue != null) model.put(alias, topLevelValue);
+            for (Map<String, Object> row : rows) {
+                Object rowValue = resolveMappedValue(row, source);
+                if (rowValue != null) row.put(alias, rowValue);
+            }
+        });
+        return model;
+    }
+
+    private Object resolveMappedValue(Map<String, Object> values, String source) {
+        if (!source.contains(".")) return values.get(source);
+        Object current = values;
+        for (String part : source.split("\\.")) {
+            if (!(current instanceof Map<?, ?> map)) return null;
+            current = map.get(part);
+        }
+        return current;
+    }
+
+    private String normalizePlaceholderName(String value) {
+        String result = value == null ? "" : value.trim();
+        if (result.startsWith("{{") && result.endsWith("}}")) {
+            result = result.substring(2, result.length() - 2);
+        } else if (result.startsWith("[") && result.endsWith("]")) {
+            result = result.substring(1, result.length() - 1);
+        }
+        return result.trim();
+    }
+
+    private boolean isDataPlaceholder(String value, ReportDesignerDto.TemplateMapping mapping) {
+        String source = mapping.getPlaceholderMappings().getOrDefault(value, value);
+        return Set.of("rowNumber", "scaleId", "scaleCode", "scaleName", "location", "period",
+                "data1Start", "data2Start", "data3Start", "data4Start", "data5Start",
+                "data1End", "data2End", "data3End", "data4End", "data5End",
+                "data1Total", "data2Total", "data3Total", "data4Total", "data5Total",
+                "recordCount", "lastTime", "direction", "ratio").contains(source);
+    }
+
+    private int valueOrZero(Integer value) {
+        return value == null ? 0 : value;
+    }
+
     /**
      * Convert ReportRow to Map for template rendering
      */
@@ -1227,7 +1332,7 @@ public class ReportExportService {
         TemplateFileType fileType = detectTemplateFileType(filename);
         
         return switch (fileType) {
-            case WORD -> exportWordTemplate(templateFile, reportData);
+            case WORD -> exportWordTemplate(templateFile, reportData, templateImport.getTemplate());
             case PDF_HTML -> exportPdfTemplate(templateFile, reportData);
             case EXCEL -> exportExcelTemplate(templateFile, reportData, templateImport.getTemplate());
             default -> throw new RuntimeException("Unsupported template file type: " + filename);

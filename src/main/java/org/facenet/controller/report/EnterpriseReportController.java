@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -36,6 +37,7 @@ import java.util.Map;
 @RequestMapping("/reports")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_VIEW')")
 public class EnterpriseReportController {
 
     private final ReportDefinitionService reportDefinitionService;
@@ -48,6 +50,7 @@ public class EnterpriseReportController {
      * No need for report code or report definition
      */
     @PostMapping("/export")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<byte[]> exportWithTemplate(
             @RequestParam(name = "importId", required = true) Long importId,
             
@@ -105,6 +108,7 @@ public class EnterpriseReportController {
      * Supports direction-based overview and enhanced statistics
      */
     @PostMapping("/export/v2")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<byte[]> exportIntervalReportV2(
             @Valid @RequestBody IntervalReportExportRequestV2 request,
             HttpServletRequest httpRequest) {

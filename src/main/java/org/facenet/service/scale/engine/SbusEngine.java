@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.event.DataField;
 import org.facenet.event.MeasurementEvent;
+import org.facenet.service.scale.engine.util.ProtocolRuntimeDependencies;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,6 +48,7 @@ public class SbusEngine implements ScaleEngine {
     private static final byte CMD_TARE = 0x54;
     
     public SbusEngine(ScaleConfig config, BlockingQueue<MeasurementEvent> queue) {
+        ProtocolRuntimeDependencies.prepareDirectSerial("S-Bus");
         this.config = config;
         this.queue = queue;
     }

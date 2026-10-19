@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch4jConfig>
+  <headerType>console</headerType>
+  <jar>target\ScaleHubIOT-1.0-SNAPSHOT.jar</jar>
+  <outfile>ScaleHubIOT.exe</outfile>
+  <errTitle>ScaleHubIOT</errTitle>
+  <chdir>.</chdir>
+  <jre>
+    <minVersion>21</minVersion>
+    <initialHeapSize>512</initialHeapSize>
+    <maxHeapSize>2048</maxHeapSize>
+  </jre>
+</launch4jConfig>

@@ -63,6 +63,7 @@ public class EngineReloadListener {
                 break;
 
             case "SCALE_DELETE":
+            case "SCALE_SOFT_DELETE":
                 // Scale bị xóa -> Stop engine
                 log.info("[EngineReload] Stopping engine for deleted scale {}", event.getScaleId());
                 engineManager.stopEngine(event.getScaleId());
@@ -71,9 +72,9 @@ public class EngineReloadListener {
 
             default:
                 log.warn("[EngineReload] Unknown change type: {}", event.getChangeType());
-        
+        }
+
         // Broadcast scale summary sau khi có thay đổi
         monitoringService.broadcastScaleSummaryNow();
-        }
     }
 }

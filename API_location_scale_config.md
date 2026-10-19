@@ -30,17 +30,21 @@
 ```
 ### GET http://localhost:8080/api/v1/locations
 
-* Parameters
--  `page`: integer
-- `size`: integer
-- `sort`: string ("field,asc/desc")
-- `search`: string
-- `code`: string
-- `parentId`: integer
+**QUAN TRỌNG: Khi có `code` hoặc `parentId`, phân trang sẽ BỊ BỎ QUA HOÀN TOÀN, dù có truyền `page`/`size` vào.**
+
+* Parameters:
+-  `code`: string - **[PRIORITY 1]** Tìm vị trí theo mã code → Trả về cây đầy đủ với vị trí này làm gốc (BỎ QUA phân trang)
+- `parentId`: integer - **[PRIORITY 2]** Tìm vị trí theo ID → Trả về cây đầy đủ với vị trí này làm gốc (BỎ QUA phân trang)
+- `tree`: boolean - Trả về cây đầy đủ tất cả vị trí (mặc định true nếu không có tham số nào)
+- `search`: string - Tìm kiếm theo name, code, description → Trả về danh sách phẳng CÓ phân trang
+- `page`: integer - Trang hiện tại (CHỈ dùng khi search, BỊ BỎ QUA khi có code/parentId)
+- `size`: integer - Kích thước trang (CHỈ dùng khi search, BỊ BỎ QUA khi có code/parentId)
+- `sort`: string - Sắp xếp theo trường ("field,asc/desc")
 
 * Response code: 200
 * Response body:
-- Nếu filter, paging null hết, kết quả trả về dạng cây như sau:
+
+**Trường hợp 1: Không có tham số hoặc `tree=true` - Trả về cây đầy đủ:**
 ``` json
 {
   "success": true,
@@ -81,7 +85,88 @@
   ]
 }
 ```
-- Nếu paging, filter có giá trị, trả về danh sách phẳng:
+
+**Trường hợp 2: Có `code` - Trả về cây với vị trí tìm được làm gốc (KHÔNG PHÂN TRANG):**
+``` json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "code": "WS_01",
+    "name": "string",
+    "children": [
+      {
+        "id": 2,
+        "code": "AAA",
+        "name": "AAA",
+        "children": [],
+        "parent_id": 1,
+        "created_at": "2025-12-25T09:44:57.568227Z",
+        "created_by": "admin",
+        "updated_at": "2025-12-25T09:58:06.681294Z",
+        "updated_by": "admin"
+      },
+      {
+        "id": 3,
+        "code": "string",
+        "name": "string",
+        "children": [],
+        "parent_id": 1,
+        "created_at": "2026-01-08T08:06:49.640589Z",
+        "created_by": "admin",
+        "updated_at": "2026-01-08T08:06:49.640589Z",
+        "updated_by": "admin"
+      }
+    ],
+    "created_at": "2025-12-24T07:11:33.079615Z",
+    "created_by": "admin",
+    "updated_at": "2026-01-08T08:06:25.163218Z",
+    "updated_by": "admin"
+  }
+}
+```
+
+**Trường hợp 3: Có `parentId` - Trả về cây với vị trí cha làm gốc (KHÔNG PHÂN TRANG):**
+``` json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "code": "WS_01",
+    "name": "string",
+    "children": [
+      {
+        "id": 2,
+        "code": "AAA",
+        "name": "AAA",
+        "children": [],
+        "parent_id": 1,
+        "created_at": "2025-12-25T09:44:57.568227Z",
+        "created_by": "admin",
+        "updated_at": "2025-12-25T09:58:06.681294Z",
+        "updated_by": "admin"
+      },
+      {
+        "id": 3,
+        "code": "string",
+        "name": "string",
+        "children": [],
+        "parent_id": 1,
+        "created_at": "2026-01-08T08:06:49.640589Z",
+        "created_by": "admin",
+        "updated_at": "2026-01-08T08:06:49.640589Z",
+        "updated_by": "admin"
+      }
+    ],
+    "created_at": "2025-12-24T07:11:33.079615Z",
+    "created_by": "admin",
+    "updated_at": "2026-01-08T08:06:25.163218Z",
+    "updated_by": "admin"
+  }
+}
+```
+
+**Trường hợp 4: Có `search` với paging - Trả về danh sách phẳng có phân trang:**
 ``` json
 {
   "success": true,

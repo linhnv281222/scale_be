@@ -150,3 +150,47 @@ Hệ thống đang render Word qua poi-tl/XWPF. Template DOCX nên dùng các pl
 - Export báo cáo truyền `templateId`
 - Download file `.docx` để đối chiếu
 - (Tuỳ chọn) Set default template và export không truyền `templateId` (nếu luồng export của bạn có fallback default)
+
+---
+
+## 8) Troubleshooting
+
+### Vấn đề: File xuất ra không có dữ liệu bảng
+
+Xem hướng dẫn chi tiết tại: [TROUBLESHOOTING_EMPTY_TABLE.md](./TROUBLESHOOTING_EMPTY_TABLE.md)
+
+**Các bước debug nhanh:**
+
+1. **Kiểm tra log** - Tìm dòng:
+   ```
+   Queried data: X rows
+   Data model prepared - rows count: X
+   First row sample: {...}
+   ```
+
+2. **Kiểm tra template Word** - Xem: [WORD_TEMPLATE_TABLE_GUIDE.md](./WORD_TEMPLATE_TABLE_GUIDE.md)
+   - Cú pháp `{{#rows}}...{{/rows}}` phải đúng
+   - Với bảng Word: cần 4 dòng (header, {{#rows}}, data placeholders, {{/rows}})
+
+3. **Test với template đơn giản:**
+   ```
+   {{#rows}}
+   {{rowNumber}}. {{scaleCode}} - {{data1Total}}
+   {{/rows}}
+   ```
+
+4. **Kiểm tra dữ liệu trong DB:**
+   ```sql
+   SELECT COUNT(*) FROM weighing_logs 
+   WHERE time BETWEEN '2025-01-01' AND '2025-01-31';
+   ```
+
+### Các tài liệu tham khảo
+
+- [TEMPLATE_EXPORT_API_GUIDE.md](./TEMPLATE_EXPORT_API_GUIDE.md) - API xuất báo cáo với template
+- [WORD_TEMPLATE_TABLE_GUIDE.md](./WORD_TEMPLATE_TABLE_GUIDE.md) - Hướng dẫn tạo template Word
+- [TROUBLESHOOTING_EMPTY_TABLE.md](./TROUBLESHOOTING_EMPTY_TABLE.md) - Debug bảng trống
+
+---
+
+Hệ thống ScaleHub IoT đã hỗ trợ luồng Word Template mới, phục vụ cho yêu cầu báo cáo chuyên nghiệp theo định dạng văn bản (.docx).

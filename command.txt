@@ -1,0 +1,5 @@
+scp ScaleHubIOT-1.0-SNAPSHOT.jar root@103.82.27.132:/home/Electronic_Scale/BE
+ss -ltnp | grep 9090
+kill <pid>
+nohup java -jar ScaleHubIOT-1.0-SNAPSHOT.jar --spring.profiles.active=prod > app.log 2>&1 &
+nohup java -jar ScaleHubIOT-1.0-SNAPSHOT.jar --spring.profiles.active=prod > app.log 2>&1 &

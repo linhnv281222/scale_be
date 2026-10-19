@@ -10,6 +10,7 @@ import org.facenet.entity.scale.ScaleConfig;
 import org.facenet.event.DataField;
 import org.facenet.event.MeasurementEvent;
 import org.facenet.service.scale.engine.util.ModbusDataConverter;
+import org.facenet.service.scale.engine.util.ConnectionFailureTracker;
 
 import java.net.InetAddress;
 import java.time.ZonedDateTime;
@@ -33,13 +34,18 @@ import java.util.concurrent.BlockingQueue;
  */
 @Slf4j
 public class ModbusTcpEngine implements ScaleEngine {
+
+    private static final int DEFAULT_RESPONSE_TIMEOUT_MS = 5000;
+    private static final int RECONNECT_DELAY_MS = 5000;
+    private static final long OFFLINE_THRESHOLD_MS = 60_000L;
     
     private final ScaleConfig config;
     private final BlockingQueue<MeasurementEvent> queue;
-    private volatile boolean stopped = true;
+    private volatile boolean stopped = false;
     private volatile boolean running = false;
     
     private ModbusMaster master;
+    private final ConnectionFailureTracker failureTracker = new ConnectionFailureTracker();
     
     public ModbusTcpEngine(ScaleConfig config, BlockingQueue<MeasurementEvent> queue) {
         this.config = config;
@@ -79,7 +85,9 @@ public class ModbusTcpEngine implements ScaleEngine {
             // 3. Tạo Modbus Master
             master = ModbusMasterFactory.createModbusMasterTCP(tcpParameters);
             Modbus.setAutoIncrementTransactionId(true);
-            master.setResponseTimeout(2000); // Timeout 2 giây
+            Integer responseTimeout = getFirstConnParamAsInt("response_timeout_ms", "read_timeout_ms");
+            master.setResponseTimeout(responseTimeout != null
+                    ? responseTimeout : DEFAULT_RESPONSE_TIMEOUT_MS);
             
             if (deviceId != null) {
                 log.info("[Engine {}] Connecting to {}:{} with Device ID: {}...", config.getScaleId(), ip, port, deviceId);
@@ -100,25 +108,14 @@ public class ModbusTcpEngine implements ScaleEngine {
                         }
                     }
                     
-                    // Tạo MeasurementEvent
-                    MeasurementEvent event = MeasurementEvent.builder()
-                            .scaleId(config.getScaleId())
-                            .lastTime(ZonedDateTime.now())
-                            .status("ONLINE")
-                            .build();
-                    
                     // Lấy Unit ID (Slave ID)
-                    Integer unitId = getConnParamAsInt("unit_id");
+                    Integer unitId = getFirstConnParamAsInt("unit_id", "device_id", "slave_id", "id");
                     if (unitId == null) {
                         unitId = 1; // Default Unit ID
                     }
                     
-                    // Đọc data_1 -> data_5 và tạo DataField object
-                    event.setData1(createDataField(master, unitId, config.getData1()));
-                    event.setData2(createDataField(master, unitId, config.getData2()));
-                    event.setData3(createDataField(master, unitId, config.getData3()));
-                    event.setData4(createDataField(master, unitId, config.getData4()));
-                    event.setData5(createDataField(master, unitId, config.getData5()));
+                    MeasurementEvent event = readMeasurement(master, unitId);
+                    recordSuccessfulRead();
                     
                     // Đẩy vào Queue
                     queue.put(event);
@@ -129,20 +126,22 @@ public class ModbusTcpEngine implements ScaleEngine {
                     Thread.currentThread().interrupt();
                     break;
                 } catch (Exception e) {
-                    // QUAN TRỌNG: Không để exception kill thread
                     log.error("[Engine {}] Error reading scale: {}", config.getScaleId(), e.getMessage());
-                    
-                    // Đánh dấu offline và retry sau 5s
+
+                    publishOfflineIfDue(e);
                     try {
-                        // Ngắt kết nối và thử kết nối lại
                         if (master != null && master.isConnected()) {
                             master.disconnect();
                         }
-                        Thread.sleep(5000);
+                        Thread.sleep(RECONNECT_DELAY_MS);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         break;
+                    } catch (Exception disconnectError) {
+                        log.warn("[Engine {}] Error disconnecting failed connection: {}",
+                                config.getScaleId(), disconnectError.getMessage());
                     }
+                    continue;
                 }
                 
                 // Nghỉ theo poll_interval
@@ -169,47 +168,67 @@ public class ModbusTcpEngine implements ScaleEngine {
      * @param dataConfig Cấu hình data slot (data_1, data_2, ...)
      * @return String value hoặc null nếu không đọc được
      */
-    private String readRegister(ModbusMaster master, int unitId, Map<String, Object> dataConfig) {
+    private MeasurementEvent readMeasurement(ModbusMaster master, int unitId) throws Exception {
+        if (!hasConfiguredDataField()) {
+            throw new IllegalStateException("No enabled data field is configured");
+        }
+
+        DataField data1 = createDataField(master, unitId, config.getData1());
+        DataField data2 = createDataField(master, unitId, config.getData2());
+        DataField data3 = createDataField(master, unitId, config.getData3());
+        DataField data4 = createDataField(master, unitId, config.getData4());
+        DataField data5 = createDataField(master, unitId, config.getData5());
+
+        return MeasurementEvent.builder()
+                .scaleId(config.getScaleId())
+                .lastTime(ZonedDateTime.now())
+                .status("ONLINE")
+                .data1(data1)
+                .data2(data2)
+                .data3(data3)
+                .data4(data4)
+                .data5(data5)
+                .build();
+    }
+
+    private String readRegister(ModbusMaster master, int unitId, Map<String, Object> dataConfig) throws Exception {
         if (dataConfig == null || !isDataSlotUsed(dataConfig)) {
             return null;
         }
-        
-        try {
-            // Lấy thông tin thanh ghi từ config (hỗ trợ nhiều format)
-            Integer startAddress = getDataConfigParam(dataConfig, "start_register");
-            if (startAddress == null) {
-                startAddress = getDataConfigParam(dataConfig, "register_start"); // Fallback
-            }
-            
-            Integer numRegisters = getDataConfigParam(dataConfig, "num_registers");
-            if (numRegisters == null) {
-                numRegisters = getDataConfigParam(dataConfig, "register_count"); // Fallback
-            }
-            
-            if (startAddress == null || numRegisters == null) {
-                log.warn("[Engine {}] Invalid register config", config.getScaleId());
-                return null;
-            }
-            
-            // Đọc Holding Registers
-            int[] registers = master.readHoldingRegisters(unitId, startAddress, numRegisters);
-            
-            // Lấy data_type từ config
-            String dataType = getDataConfigParam(dataConfig, "data_type");
-            
-            // Convert sang String với data_type tương ứng
-            return ModbusDataConverter.registersToString(registers, dataType);
-            
-        } catch (Exception e) {
-            log.error("[Engine {}] Error reading register: {}", config.getScaleId(), e.getMessage());
-            return null;
+
+        Integer startAddress = getIntegerDataConfigParam(dataConfig,
+                "start_registers", "start_register", "register_start");
+        Integer numRegisters = getIntegerDataConfigParam(dataConfig,
+                "num_registers", "register_count");
+
+        if (startAddress == null || numRegisters == null || numRegisters <= 0) {
+            throw new IllegalArgumentException("Invalid register config for scale " + config.getScaleId());
         }
+
+        int[] registers = readRegisters(master, unitId, startAddress, numRegisters, dataConfig);
+        String value = ModbusDataConverter.registersToString(registers, dataConfig);
+        if (value == null) {
+            throw new IllegalStateException("Unable to convert register value for scale " + config.getScaleId());
+        }
+        return value;
+    }
+
+    private int[] readRegisters(ModbusMaster master, int unitId, int startAddress,
+                                int numRegisters, Map<String, Object> dataConfig) throws Exception {
+        Integer functionCode = getIntegerDataConfigParam(dataConfig, "function_code", "function");
+        int code = functionCode != null ? functionCode : 3;
+        return switch (code) {
+            case 3 -> master.readHoldingRegisters(unitId, startAddress, numRegisters);
+            case 4 -> master.readInputRegisters(unitId, startAddress, numRegisters);
+            default -> throw new IllegalArgumentException("Unsupported Modbus function_code " + code
+                    + "; register fields support function 3 or 4");
+        };
     }
     
     /**
      * Tạo DataField object từ config và giá trị đọc được
      */
-    private DataField createDataField(ModbusMaster master, int unitId, Map<String, Object> dataConfig) {
+    private DataField createDataField(ModbusMaster master, int unitId, Map<String, Object> dataConfig) throws Exception {
         if (dataConfig == null || !isDataSlotUsed(dataConfig)) {
             return null;
         }
@@ -225,6 +244,35 @@ public class ModbusTcpEngine implements ScaleEngine {
                 .name(name)
                 .value(value)
                 .build();
+    }
+
+    private boolean hasConfiguredDataField() {
+        return isDataSlotUsed(config.getData1()) || isDataSlotUsed(config.getData2())
+                || isDataSlotUsed(config.getData3()) || isDataSlotUsed(config.getData4())
+                || isDataSlotUsed(config.getData5());
+    }
+
+    private void recordSuccessfulRead() {
+        failureTracker.recordSuccess();
+    }
+
+    private void publishOfflineIfDue(Exception cause) {
+        long now = System.currentTimeMillis();
+        if (failureTracker.shouldPublishOffline(now, OFFLINE_THRESHOLD_MS)) {
+            MeasurementEvent offlineEvent = MeasurementEvent.builder()
+                    .scaleId(config.getScaleId())
+                    .lastTime(ZonedDateTime.now())
+                    .status("OFFLINE")
+                    .build();
+            if (queue.offer(offlineEvent)) {
+                failureTracker.markOfflinePublished();
+                log.warn("[Engine {}] Marked OFFLINE after a continuous read failure: {}",
+                        config.getScaleId(), cause.getMessage());
+            } else {
+                log.error("[Engine {}] Cannot publish OFFLINE event because measurement queue is full",
+                        config.getScaleId());
+            }
+        }
     }
 
     /**
@@ -305,6 +353,16 @@ public class ModbusTcpEngine implements ScaleEngine {
             return null;
         }
     }
+
+    private Integer getFirstConnParamAsInt(String... keys) {
+        for (String key : keys) {
+            Integer value = getConnParamAsInt(key);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
     
     /**
      * Lấy tham số từ data config
@@ -312,6 +370,23 @@ public class ModbusTcpEngine implements ScaleEngine {
     @SuppressWarnings("unchecked")
     private <T> T getDataConfigParam(Map<String, Object> dataConfig, String key) {
         return (T) dataConfig.get(key);
+    }
+
+    private Integer getIntegerDataConfigParam(Map<String, Object> dataConfig, String... keys) {
+        for (String key : keys) {
+            Object value = dataConfig.get(key);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            if (value != null) {
+                try {
+                    return Integer.parseInt(value.toString().trim());
+                } catch (NumberFormatException ignored) {
+                    // Try the next alias.
+                }
+            }
+        }
+        return null;
     }
     
     /**

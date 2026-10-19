@@ -36,7 +36,7 @@ public class ScaleController {
      * Supports filters: locationId, manufacturerId, protocolId, direction, isActive, model
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SCALE_VIEW')")
     @Operation(
         summary = "Get all scales",
         description = "Retrieve paginated list of scales with optional search and filters. " +
@@ -92,7 +92,7 @@ public class ScaleController {
      * Returns: paginated data with total_scales, active_scales, inactive_scales
      */
     @GetMapping("/v2")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SCALE_VIEW')")
     @Operation(
         summary = "Get all scales with statistics (V2)",
         description = "Retrieve paginated list of scales with optional search and filters, including statistics. " +
@@ -152,7 +152,7 @@ public class ScaleController {
      * Get scale by ID
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SCALE_VIEW')")
     @Operation(
         summary = "Get scale by ID",
         description = "Retrieve a specific scale with its configuration by ID"
@@ -166,7 +166,7 @@ public class ScaleController {
      * Create a new scale with configuration
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CONFIG_MANAGE')")
     @Operation(
         summary = "Create new scale",
         description = "Create a new scale with integrated configuration. All configuration fields can be provided in the request."
@@ -185,7 +185,7 @@ public class ScaleController {
      * Update scale with configuration
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CONFIG_MANAGE')")
     @Operation(
         summary = "Update scale",
         description = "Update an existing scale with integrated configuration. All fields including configuration can be updated."

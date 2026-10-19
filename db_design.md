@@ -476,3 +476,2202 @@ CREATE INDEX idx_export_logs_user ON report_export_logs(created_by, created_at D
 * **Multi-tenant Ready**: `organization_settings` cho phép multiple organizations
 * **Flexible Columns**: `report_columns` mapping động, không hardcode
 * **Audit Trail**: `report_export_logs` theo dõi toàn bộ lịch sử xuất báo cáo
+
+``` json
+{
+    "success": true,
+    "data": {
+        "data": [
+            {
+                "interval": "SHIFT",
+                "fromDate": "2026-01-14T07:55:15.176Z",
+                "toDate": "2026-01-21T16:59:59.999Z",
+                "dataFieldNames": {
+                    "data_5": {
+                        "name": "",
+                        "unit": ""
+                    },
+                    "data_2": {
+                        "name": "Lưu lượng",
+                        "unit": ""
+                    },
+                    "data_1": {
+                        "name": "Khối lượng tích lũy",
+                        "unit": "kg"
+                    },
+                    "data_3": {
+                        "name": "Tốc độ",
+                        "unit": ""
+                    }
+                },
+                "aggregationByField": {
+                    "data_5": "AVG",
+                    "data_2": "ABS",
+                    "data_1": "SUM",
+                    "data_4": "ABS",
+                    "data_3": "ABS"
+                },
+                "ratioFormula": "data_1/data_3",
+                "overview": {
+                    "1": {
+                        "data_2": {
+                            "value": "841524571.75",
+                            "aggregation": "AVG",
+                            "name": "Lưu lượng",
+                            "unit": "",
+                            "used": true
+                        },
+                        "data_1": {
+                            "value": "13223531566.00",
+                            "aggregation": "SUM",
+                            "name": "Khối lượng",
+                            "unit": "kg",
+                            "used": true
+                        },
+                        "data_3": {
+                            "value": "841524571.75",
+                            "aggregation": "AVG",
+                            "name": "Tốc độ",
+                            "unit": "",
+                            "used": true
+                        }
+                    }
+                },
+                "rows": [
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-15 CA2",
+                        "recordCount": 2674,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-15 13:30:00",
+                        "end_time": "2026-01-15 21:30:28",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1583242846",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1583242846",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1583242846",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1934521166",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1934521166",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1934521166",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "351278320",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "351278320.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "351278320",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-15 CA3",
+                        "recordCount": 898,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "33.2296",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-15 21:30:00",
+                        "end_time": "2026-01-16 05:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1934127944",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1934127944",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1934127944",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "-1983673917",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "-1983673917",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "-1983673917",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "117901063",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "3917801861.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "117901063",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-16 CA1",
+                        "recordCount": 2882,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-16 05:30:00",
+                        "end_time": "2026-01-16 13:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "-1983673917",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "-1983673917",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "-1983673917",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "6422626",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "6422626",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "6422626",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1990096543",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1990096543.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1990096543",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-16 CA2",
+                        "recordCount": 2884,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-16 13:30:00",
+                        "end_time": "2026-01-16 21:30:28",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "6422626",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "6422626",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "6422626",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "384046820",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "384046820",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "384046820",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "377624194",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377624194.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "377624194",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-16 CA3",
+                        "recordCount": 2878,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.0242",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-16 21:30:00",
+                        "end_time": "2026-01-17 05:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "383653598",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "383653598",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "383653598",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "279711916",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "279711916",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "279711916",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "4294836222",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "103941682.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "4294836222",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-17 CA1",
+                        "recordCount": 2882,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.2356",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-17 05:30:00",
+                        "end_time": "2026-01-17 13:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "279711916",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "279711916",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "279711916",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "163973574",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "163973574",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "163973574",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "491330889",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "115738342.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "491330889",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-17 CA2",
+                        "recordCount": 2884,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-17 13:30:00",
+                        "end_time": "2026-01-17 21:30:28",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "163973574",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "163973574",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "163973574",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "541532231",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "541532231",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "541532231",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "377558657",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377558657.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "377558657",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-17 CA3",
+                        "recordCount": 2878,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.5908",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-17 21:30:00",
+                        "end_time": "2026-01-18 05:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "541139009",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "541139009",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "541139009",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "918369981",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "918369981",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "918369981",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "638526991",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377230972.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "638526991",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-18 CA1",
+                        "recordCount": 2882,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.6297",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-18 05:30:00",
+                        "end_time": "2026-01-18 13:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "918369981",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "918369981",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "918369981",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "277155973",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "277155973",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "277155973",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1018313906",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "641214008.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1018313906",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-18 CA2",
+                        "recordCount": 2884,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.5892",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-18 13:30:00",
+                        "end_time": "2026-01-18 21:30:28",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "277155973",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "277155973",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "277155973",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "18219286",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "18219286",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "18219286",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "439491122",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "258936687.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "439491122",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-18 CA3",
+                        "recordCount": 2878,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.4188",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-18 21:30:00",
+                        "end_time": "2026-01-19 05:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "17826064",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "17826064",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "17826064",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "394991499",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "394991499",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "394991499",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "900543917",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377165435.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "900543917",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-19 CA1",
+                        "recordCount": 2882,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-19 05:30:00",
+                        "end_time": "2026-01-19 13:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "394991499",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "394991499",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "394991499",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "772353545",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "772353545",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "772353545",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "377362046",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377362046.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "377362046",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-19 CA2",
+                        "recordCount": 2884,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-19 13:30:00",
+                        "end_time": "2026-01-19 21:30:28",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "772353545",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "772353545",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "772353545",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1149977739",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1149977739",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1149977739",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "377624194",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377624194.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "377624194",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-19 CA3",
+                        "recordCount": 2877,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.3333",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-19 21:30:00",
+                        "end_time": "2026-01-20 05:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1149584517",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1149584517",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1149584517",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1526749952",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1526749952",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1526749952",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1131496305",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377165435.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1131496305",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-20 CA1",
+                        "recordCount": 2881,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.7807",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-20 05:30:00",
+                        "end_time": "2026-01-20 13:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1526749952",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1526749952",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1526749952",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "185994006",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "185994006",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "185994006",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1717397085",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1340755946.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1717397085",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-20 CA2",
+                        "recordCount": 2884,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.4428",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-20 13:30:00",
+                        "end_time": "2026-01-20 21:30:28",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "185994006",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "185994006",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "185994006",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "333779941",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "333779941",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "333779941",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "333779941",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "147785935.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "333779941",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-20 CA3",
+                        "recordCount": 2879,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "0.3162",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-20 21:30:00",
+                        "end_time": "2026-01-21 05:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "333386719",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "333386719",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "333386719",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "710748765",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "710748765",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "710748765",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1193363233",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377362046.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1193363233",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-21 CA1",
+                        "recordCount": 2881,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-21 05:30:00",
+                        "end_time": "2026-01-21 13:30:00",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "710748765",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "710748765",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "710748765",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1087979737",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1087979737",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1087979737",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "377230972",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "377230972.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "377230972",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-21 CA2",
+                        "recordCount": 501,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "1.0000",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-21 13:30:00",
+                        "end_time": "2026-01-21 14:55:18",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1087979737",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1087979737",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1087979737",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1153451200",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1153451200",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1153451200",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "65471463",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "65471463.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "65471463",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    },
+                    {
+                        "scale": {
+                            "id": 1,
+                            "name": "Cân 01",
+                            "model": "MODEL 1",
+                            "direction": "IMPORT",
+                            "location": {
+                                "id": 1,
+                                "code": "VT01",
+                                "name": "Kho "
+                            },
+                            "is_active": true,
+                            "created_at": "2025-12-30T01:50:06.746173Z",
+                            "created_by": "admin",
+                            "updated_at": "2026-01-14T01:33:14.935524Z",
+                            "updated_by": "admin"
+                        },
+                        "period": "2026-01-21 CA3",
+                        "recordCount": 1981,
+                        "direction": 1,
+                        "ratio": {
+                            "value": "3.4489",
+                            "formula": "data_1/data_3"
+                        },
+                        "start_time": "2026-01-21 21:30:00",
+                        "end_time": "2026-01-21 14:55:18",
+                        "start_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "259264372",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "259264372",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "259264372",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "end_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "1153451200",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "1153451200",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "1153451200",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        },
+                        "data_values": {
+                            "data_5": {
+                                "value": "0",
+                                "name": "Data 5",
+                                "unit": "",
+                                "used": false
+                            },
+                            "data_2": {
+                                "value": "259264372",
+                                "name": "Lưu lượng",
+                                "unit": "",
+                                "used": true
+                            },
+                            "data_1": {
+                                "value": "894186828.00",
+                                "name": "Khối lượng",
+                                "unit": "kg",
+                                "used": true
+                            },
+                            "data_3": {
+                                "value": "259264372",
+                                "name": "Tốc độ",
+                                "unit": "",
+                                "used": true
+                            }
+                        }
+                    }
+                ],
+                "dataFieldSummaries": {
+                    "data_2": {
+                        "value": "841524571.75",
+                        "aggregation": "AVG",
+                        "name": "Lưu lượng",
+                        "unit": "",
+                        "used": true
+                    },
+                    "data_1": {
+                        "value": "13223531566.00",
+                        "aggregation": "SUM",
+                        "name": "Khối lượng",
+                        "unit": "kg",
+                        "used": true
+                    },
+                    "data_3": {
+                        "value": "841524571.75",
+                        "aggregation": "AVG",
+                        "name": "Tốc độ",
+                        "unit": "",
+                        "used": true
+                    }
+                }
+            }
+        ],
+        "page": 0,
+        "size": 20,
+        "total_elements": 60,
+        "total_pages": 3,
+        "is_first": true,
+        "is_last": false,
+        "has_next": true,
+        "has_previous": false
+    }
+}
+```

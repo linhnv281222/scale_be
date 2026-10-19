@@ -9,6 +9,7 @@ import org.facenet.service.report.ReportTemplateService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,6 +24,7 @@ import java.util.List;
 @RequestMapping("/report-templates")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_VIEW')")
 public class ReportTemplateController {
 
     private final ReportTemplateService reportTemplateService;
@@ -43,6 +45,7 @@ public class ReportTemplateController {
 
     @Deprecated
     @PostMapping("/word")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<ApiResponse<ReportTemplateDto.WordTemplateResponse>> createWordTemplate(
             @Valid @RequestBody ReportTemplateDto.CreateWordTemplateRequest request) {
         return ResponseEntity.ok(ApiResponse.success(reportTemplateService.createWordTemplate(request)));
@@ -50,6 +53,7 @@ public class ReportTemplateController {
 
     @Deprecated
     @PutMapping("/word/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<ApiResponse<ReportTemplateDto.WordTemplateResponse>> updateWordTemplate(
             @PathVariable("id") Long id,
             @Valid @RequestBody ReportTemplateDto.UpdateWordTemplateRequest request) {
@@ -58,12 +62,14 @@ public class ReportTemplateController {
 
     @Deprecated
     @PostMapping("/word/{id}/set-default")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<ApiResponse<ReportTemplateDto.WordTemplateResponse>> setDefaultWordTemplate(@PathVariable("id") Long id) {
         return ResponseEntity.ok(ApiResponse.success(reportTemplateService.setDefaultWordTemplate(id)));
     }
 
     @Deprecated
     @PostMapping(value = "/word/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<ApiResponse<ReportTemplateDto.WordTemplateResponse>> uploadWordTemplateFile(
             @PathVariable("id") Long id,
             @RequestPart("file") MultipartFile file) throws IOException {
@@ -85,6 +91,7 @@ public class ReportTemplateController {
 
     @Deprecated
     @DeleteMapping("/word/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<Void> deleteWordTemplate(@PathVariable("id") Long id) {
         reportTemplateService.deleteWordTemplate(id);
         return ResponseEntity.noContent().build();
@@ -98,6 +105,7 @@ public class ReportTemplateController {
      * Request body: Form fields with template metadata + file as multipart
      */
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<ApiResponse<ReportTemplateDto.TemplateImportResponse>> importTemplate(
             @RequestPart("file") MultipartFile file,
             @RequestParam("templateCode") String templateCode,
@@ -201,6 +209,7 @@ public class ReportTemplateController {
      * POST /api/v1/report-templates/imports/{importId}/archive
      */
     @PostMapping("/imports/{importId}/archive")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<ApiResponse<ReportTemplateDto.TemplateImportResponse>> archiveImportedTemplate(
             @PathVariable("importId") Long importId) {
         ReportTemplateDto.TemplateImportResponse response = reportTemplateService.archiveImportedTemplate(importId);
@@ -213,6 +222,7 @@ public class ReportTemplateController {
      */
     @Deprecated
     @DeleteMapping("/imports/{importId}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<Void> deleteImportedTemplate(@PathVariable("importId") Long importId) {
         reportTemplateService.deleteImportedTemplate(importId);
         return ResponseEntity.noContent().build();

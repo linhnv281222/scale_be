@@ -57,7 +57,7 @@ public class ScaleMonitoringController {
      * POST /api/v1/monitoring/check/{scaleId}
      */
     @PostMapping("/check/{scaleId}")
-    @PreAuthorize("hasAuthority('ADMIN') or hasAuthority('MONITOR_SCALES')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<ScaleMonitoringService.ScaleHealthResult>> checkScaleHealth(
             @PathVariable Long scaleId) {
         ScaleMonitoringService.ScaleHealthResult result = monitoringService.checkScaleHealth(scaleId);
@@ -69,7 +69,7 @@ public class ScaleMonitoringController {
      * POST /api/v1/monitoring/check-all
      */
     @PostMapping("/check-all")
-    @PreAuthorize("hasAuthority('ADMIN') or hasAuthority('MONITOR_SCALES')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<String>> checkAllScales() {
         try {
             monitoringService.monitorScalesHealth();

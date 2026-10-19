@@ -14,6 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -68,10 +73,21 @@ public class EngineManager {
             
             log.info("[EngineManager] Found {} active scales", activeScales.size());
             
-            // Khởi động engine cho từng scale
-            for (Scale scale : activeScales) {
+            List<Scale> rtuScales = activeScales.stream()
+                    .filter(scale -> isRtuProtocol(scale.getConfig()))
+                    .toList();
+            startRtuGroups(rtuScales);
+
+            List<Scale> sabusScales = activeScales.stream()
+                    .filter(scale -> isSabusProtocol(scale.getConfig()))
+                    .toList();
+            startSabusGroups(sabusScales);
+
+            // Protocols that do not share a physical serial bus retain one engine per scale.
+            for (Scale scale : activeScales.stream()
+                    .filter(item -> !isRtuProtocol(item.getConfig()) && !isSabusProtocol(item.getConfig())).toList()) {
                 try {
-                    startEngine(scale);
+                    startStandaloneEngine(scale);
                 } catch (Exception e) {
                     log.error("[EngineManager] Failed to start engine for scale {}: {}", 
                             scale.getId(), e.getMessage(), e);
@@ -88,7 +104,7 @@ public class EngineManager {
     /**
      * Khởi động engine cho một scale
      */
-    public void startEngine(Scale scale) {
+    public synchronized void startEngine(Scale scale) {
         ScaleConfig config = scale.getConfig();
         
         if (config == null) {
@@ -96,6 +112,24 @@ public class EngineManager {
             return;
         }
         
+        if (isRtuProtocol(config)) {
+            // Rebuild RTU groups so a new scale joins the existing physical bus worker.
+            reloadAllRtuEngines();
+            return;
+        }
+
+        if (isSabusProtocol(config)) {
+            // Rebuild SABUS groups so a new station joins the existing physical bus worker.
+            reloadAllSabusEngines();
+            return;
+        }
+
+        startStandaloneEngine(scale);
+    }
+
+    private void startStandaloneEngine(Scale scale) {
+        ScaleConfig config = scale.getConfig();
+
         // Kiểm tra engine đã chạy chưa
         if (runningEngines.containsKey(scale.getId())) {
             log.warn("[EngineManager] Engine for scale {} already running", scale.getId());
@@ -121,11 +155,65 @@ public class EngineManager {
             throw new RuntimeException("Failed to start engine for scale " + scale.getId(), e);
         }
     }
+
+    private void startRtuGroups(List<Scale> rtuScales) {
+        Map<String, List<ScaleConfig>> groups = rtuScales.stream()
+                .map(Scale::getConfig)
+                .collect(Collectors.groupingBy(
+                        ModbusRtuEngine::busKey,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        groups.forEach((key, configs) -> {
+            try {
+                ModbusRtuEngine engine = new ModbusRtuEngine(configs, queue);
+                deviceEngineExecutor.submit(engine);
+                configs.forEach(config -> runningEngines.put(config.getScaleId(), engine));
+                log.info("[EngineManager] Started RTU bus {} for scales {}", key, engine.getScaleIds());
+            } catch (Exception e) {
+                log.error("[EngineManager] Failed to start RTU bus {}: {}", key, e.getMessage(), e);
+            }
+        });
+    }
+
+    private void startSabusGroups(List<Scale> sabusScales) {
+        Map<String, List<ScaleConfig>> groups = sabusScales.stream()
+                .map(Scale::getConfig)
+                .collect(Collectors.groupingBy(
+                        SabusAsciiEngine::busKey,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        groups.forEach((key, configs) -> {
+            try {
+                SabusAsciiEngine engine = new SabusAsciiEngine(configs, queue);
+                deviceEngineExecutor.submit(engine);
+                configs.forEach(config -> runningEngines.put(config.getScaleId(), engine));
+                log.info("[EngineManager] Started SABUS bus {} for scales {}", key, engine.getScaleIds());
+            } catch (Exception e) {
+                log.error("[EngineManager] Failed to start SABUS bus {}: {}", key, e.getMessage(), e);
+            }
+        });
+    }
+
+    private boolean isRtuProtocol(ScaleConfig config) {
+        if (config == null || config.getProtocol() == null) {
+            return false;
+        }
+        String protocol = config.getProtocol().trim().toUpperCase(Locale.ROOT);
+        return protocol.equals("MODBUS_RTU") || protocol.equals("MODBUSRTU") || protocol.equals("RTU");
+    }
+
+    private boolean isSabusProtocol(ScaleConfig config) {
+        if (config == null || config.getProtocol() == null) return false;
+        String protocol = config.getProtocol().trim().toUpperCase(Locale.ROOT);
+        return protocol.equals("SABUS") || protocol.equals("SABUS_ASCII");
+    }
     
     /**
      * Dừng engine của một scale
      */
-    public void stopEngine(Long scaleId) {
+    public synchronized void stopEngine(Long scaleId) {
         ScaleEngine engine = runningEngines.get(scaleId);
         
         if (engine == null) {
@@ -133,12 +221,22 @@ public class EngineManager {
             return;
         }
         
+        if (engine instanceof ModbusRtuEngine) {
+            reloadAllRtuEngines();
+        } else if (engine instanceof SabusAsciiEngine) {
+            reloadAllSabusEngines();
+        } else {
+            stopStandaloneEngine(scaleId, engine);
+        }
+    }
+
+    private void stopStandaloneEngine(Long scaleId, ScaleEngine engine) {
         try {
             engine.stop();
             runningEngines.remove(scaleId);
             log.info("[EngineManager] Stopped engine for scale {}", scaleId);
         } catch (Exception e) {
-            log.error("[EngineManager] Error stopping engine for scale {}: {}", 
+            log.error("[EngineManager] Error stopping engine for scale {}: {}",
                     scaleId, e.getMessage(), e);
         }
     }
@@ -147,18 +245,17 @@ public class EngineManager {
      * Restart engine khi cấu hình thay đổi
      */
     @Transactional
-    public void restartEngine(Long scaleId) {
+    public synchronized void restartEngine(Long scaleId) {
         log.info("[EngineManager] Restarting engine for scale {}", scaleId);
-        
-        // Dừng engine cũ
-        stopEngine(scaleId);
+
+        ScaleEngine previousEngine = runningEngines.get(scaleId);
         
         // CRITICAL FIX: Clear persistence context để tránh lấy cached entity cũ
         // JPA EntityManager có thể cache entity, dẫn đến việc không load config mới từ DB
         entityManager.clear();
         log.debug("[EngineManager] Cleared EntityManager persistence context before reloading config");
         
-        // Load lại config và start engine mới
+        // Load the fresh config before choosing whether the whole RTU bus must be rebuilt.
         scaleRepository.findByIdWithDetails(scaleId).ifPresent(scale -> {
             ScaleConfig config = scale.getConfig();
             if (config != null) {
@@ -166,12 +263,74 @@ public class EngineManager {
                         scaleId, config.getProtocol(), config.getPollInterval());
             }
             
-            if (scale.getIsActive()) {
-                startEngine(scale);
+            boolean wasRtu = previousEngine instanceof ModbusRtuEngine;
+            boolean isRtu = isRtuProtocol(config);
+            boolean wasSabus = previousEngine instanceof SabusAsciiEngine;
+            boolean isSabus = isSabusProtocol(config);
+
+            if (wasRtu || isRtu) {
+                if (wasSabus) {
+                    stopAllSabusEngines();
+                } else if (!wasRtu && previousEngine != null) {
+                    stopStandaloneEngine(scaleId, previousEngine);
+                }
+                reloadAllRtuEngines();
+                if (scale.getIsActive() && !isRtu) {
+                    if (isSabus) reloadAllSabusEngines();
+                    else startStandaloneEngine(scale);
+                }
+            } else if (wasSabus || isSabus) {
+                if (!wasSabus && previousEngine != null) {
+                    stopStandaloneEngine(scaleId, previousEngine);
+                }
+                reloadAllSabusEngines();
+                if (scale.getIsActive() && !isSabus) startStandaloneEngine(scale);
+            } else if (scale.getIsActive()) {
+                if (previousEngine != null) {
+                    stopStandaloneEngine(scaleId, previousEngine);
+                }
+                startStandaloneEngine(scale);
             } else {
+                if (previousEngine != null) {
+                    stopStandaloneEngine(scaleId, previousEngine);
+                }
                 log.info("[EngineManager] Scale {} is inactive, not restarting engine", scaleId);
             }
         });
+    }
+
+    private void reloadAllRtuEngines() {
+        stopAllRtuEngines();
+        entityManager.clear();
+        List<Scale> rtuScales = scaleRepository.findAllActiveWithConfig().stream()
+                .filter(scale -> isRtuProtocol(scale.getConfig()))
+                .toList();
+        startRtuGroups(rtuScales);
+    }
+
+    private void stopAllRtuEngines() {
+        Set<ScaleEngine> engines = runningEngines.values().stream()
+                .filter(ModbusRtuEngine.class::isInstance)
+                .collect(Collectors.toCollection(HashSet::new));
+        engines.forEach(ScaleEngine::stop);
+        runningEngines.entrySet().removeIf(entry -> entry.getValue() instanceof ModbusRtuEngine);
+    }
+
+    private void reloadAllSabusEngines() {
+        stopAllSabusEngines();
+        entityManager.clear();
+        List<Scale> sabusScales = scaleRepository.findAllActiveWithConfig().stream()
+                .filter(scale -> isSabusProtocol(scale.getConfig()))
+                .toList();
+        startSabusGroups(sabusScales);
+    }
+
+    private void stopAllSabusEngines() {
+        Set<ScaleEngine> engines = runningEngines.values().stream()
+                .filter(SabusAsciiEngine.class::isInstance)
+                .collect(Collectors.toCollection(HashSet::new));
+        engines.forEach(ScaleEngine::stop);
+        runningEngines.entrySet().removeIf(entry -> entry.getValue() instanceof SabusAsciiEngine);
     }
     
     /**
@@ -196,14 +355,14 @@ public class EngineManager {
     public void stopAllEngines() {
         log.info("[EngineManager] Stopping all engines...");
         
-        // Dừng tất cả engines
-        runningEngines.forEach((scaleId, engine) -> {
+        // Shared RTU engines appear under multiple scale IDs, so stop each instance once.
+        Set<ScaleEngine> uniqueEngines = new HashSet<>(runningEngines.values());
+        uniqueEngines.forEach(engine -> {
             try {
                 engine.stop();
-                log.info("[EngineManager] Stopped engine for scale {}", scaleId);
+                log.info("[EngineManager] Stopped engine {}", engine.getClass().getSimpleName());
             } catch (Exception e) {
-                log.error("[EngineManager] Error stopping engine for scale {}: {}", 
-                        scaleId, e.getMessage(), e);
+                log.error("[EngineManager] Error stopping engine: {}", e.getMessage(), e);
             }
         });
         

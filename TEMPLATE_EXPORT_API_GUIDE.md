@@ -170,19 +170,12 @@ TỔNG KẾT:
 - Tổng {{data2Name}}: {{data2GrandTotal}}
 ```
 
-## So sánh API cũ vs mới
+## API Endpoint
 
-### API Cũ (LEGACY - Vẫn hoạt động)
-```
-POST /api/v1/reports/{reportCode}/export?format=WORD
-- Cần định nghĩa report code trước
-- Cần cấu hình report definition
-- Phức tạp hơn
-```
+Hệ thống chỉ sử dụng API đơn giản với template imports:
 
-### API Mới (KHUYÊN DÙNG)
 ```
-POST /api/v1/reports/export?importId=5
+POST /api/v1/reports/export?importId={importId}
 - Chỉ cần import template
 - Đơn giản, linh hoạt
 - Trực tiếp fill data vào template

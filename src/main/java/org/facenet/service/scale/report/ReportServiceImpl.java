@@ -180,6 +180,9 @@ public class ReportServiceImpl implements ReportService {
         // Get data field names with units first
         Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames = extractDataFieldNamesWithUnits(scaleIds);
         
+        // Filter out fields with name "Trạng thái"
+        dataFieldNames = filterOutStatusFields(dataFieldNames);
+        
         for (IntervalReportResponseDto.Row v1Row : v1Response.getData()) {
             Long scaleId = v1Row.getScale().getId();
             
@@ -199,6 +202,11 @@ public class ReportServiceImpl implements ReportService {
             // Convert data values with special handling for data_1 (ABS of end - start)
             Map<String, IntervalReportResponseDtoV2.DataFieldValue> dataValues = 
                     convertDataValuesWithAbs(v1Row.getDataValues(), startValues, endValues, dataFieldNames);
+            
+            // Filter out status fields from all value maps
+            startValues = filterDataValuesByFields(startValues, dataFieldNames);
+            endValues = filterDataValuesByFields(endValues, dataFieldNames);
+            dataValues = filterDataValuesByFields(dataValues, dataFieldNames);
 
             // Calculate ratio
             IntervalReportResponseDtoV2.RatioValue ratio = calculateRatio(
@@ -664,6 +672,12 @@ public class ReportServiceImpl implements ReportService {
                 
                 for (int i = 1; i <= 5; i++) {
                     String dataKey = "data_" + i;
+                    
+                    // Only process fields that exist in dataFieldNames (already filtered)
+                    if (!dataFieldNames.containsKey(dataKey)) {
+                        continue;
+                    }
+                    
                     IntervalReportResponseDtoV2.DataFieldValue sampleField = sampleRow.getDataValues().get(dataKey);
                     
                     if (sampleField != null && sampleField.isUsed()) {
@@ -729,6 +743,12 @@ public class ReportServiceImpl implements ReportService {
         
         for (int i = 1; i <= 5; i++) {
             String dataKey = "data_" + i;
+            
+            // Only process fields that exist in dataFieldNames (already filtered)
+            if (!dataFieldNames.containsKey(dataKey)) {
+                continue;
+            }
+            
             IntervalReportResponseDtoV2.DataFieldValue sampleField = sampleRow.getDataValues().get(dataKey);
             
             if (sampleField != null && sampleField.isUsed()) {
@@ -864,6 +884,43 @@ public class ReportServiceImpl implements ReportService {
                 .name(name)
                 .unit(unit)
                 .build());
+    }
+    
+    /**
+     * Filter out data fields with name "Trạng thái" (Status)
+     */
+    private Map<String, IntervalReportResponseDtoV2.DataFieldInfo> filterOutStatusFields(
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
+        Map<String, IntervalReportResponseDtoV2.DataFieldInfo> filtered = new HashMap<>();
+        
+        for (Map.Entry<String, IntervalReportResponseDtoV2.DataFieldInfo> entry : dataFieldNames.entrySet()) {
+            IntervalReportResponseDtoV2.DataFieldInfo info = entry.getValue();
+            if (info != null && !"Trạng thái".equals(info.getName())) {
+                filtered.put(entry.getKey(), entry.getValue());
+            }
+        }
+        
+        return filtered;
+    }
+    
+    /**
+     * Filter data values map to only include keys that exist in dataFieldNames
+     */
+    private Map<String, IntervalReportResponseDtoV2.DataFieldValue> filterDataValuesByFields(
+            Map<String, IntervalReportResponseDtoV2.DataFieldValue> dataValues,
+            Map<String, IntervalReportResponseDtoV2.DataFieldInfo> dataFieldNames) {
+        if (dataValues == null) {
+            return new HashMap<>();
+        }
+        
+        Map<String, IntervalReportResponseDtoV2.DataFieldValue> filtered = new HashMap<>();
+        for (Map.Entry<String, IntervalReportResponseDtoV2.DataFieldValue> entry : dataValues.entrySet()) {
+            if (dataFieldNames.containsKey(entry.getKey())) {
+                filtered.put(entry.getKey(), entry.getValue());
+            }
+        }
+        
+        return filtered;
     }
     
     /**
