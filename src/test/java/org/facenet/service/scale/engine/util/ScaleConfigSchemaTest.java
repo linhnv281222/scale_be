@@ -101,4 +101,47 @@ class ScaleConfigSchemaTest {
         assertThrows(ValidationException.class, () -> ScaleConfigSchema.normalizeDataField(
                 "SABUS", Map.of("is_used", true, "command", "WEIGHT")));
     }
+
+    @Test
+    void normalizesGenericSerialConfiguration() {
+        Map<String, Object> connection = ScaleConfigSchema.normalizeConnection("SERIAL", Map.of(
+                "serial_port", "COM5", "baud_rate", "19200", "parity", "even"));
+        Map<String, Object> field = ScaleConfigSchema.normalizeDataField("SERIAL", Map.of(
+                "used", true, "request", "W", "regex", "weight=([0-9.]+)"));
+
+        assertEquals("COM5", connection.get("com_port"));
+        assertEquals(19200, connection.get("baud_rate"));
+        assertEquals("EVEN", connection.get("parity"));
+        assertEquals("W", field.get("command"));
+        assertEquals("weight=([0-9.]+)", field.get("response_pattern"));
+        assertEquals("NUMBER", field.get("value_type"));
+    }
+
+    @Test
+    void rejectsInvalidGenericSerialConfiguration() {
+        assertThrows(ValidationException.class, () -> ScaleConfigSchema.normalizeConnection(
+                "SERIAL", Map.of("com_port", "COM5", "baud_rate", 0)));
+        assertThrows(ValidationException.class, () -> ScaleConfigSchema.normalizeDataField(
+                "SERIAL", Map.of("is_used", true, "response_pattern", "no-capture-group")));
+        assertThrows(ValidationException.class, () -> ScaleConfigSchema.normalizeDataField(
+                "SERIAL", Map.of("is_used", true, "value_index", -1)));
+    }
+
+    @Test
+    void normalizesSbusWordAndByteOrder() {
+        Map<String, Object> normalized = ScaleConfigSchema.normalizeDataField("SBUS", Map.of(
+                "is_used", true,
+                "response_type", "float32",
+                "byte_order", "CDAB"));
+
+        assertEquals("FLOAT32", normalized.get("response_type"));
+        assertEquals("CDAB", normalized.get("byte_order"));
+        assertEquals("BIG_ENDIAN", normalized.get("word_order"));
+    }
+
+    @Test
+    void rejectsInvalidSbusWordOrder() {
+        assertThrows(ValidationException.class, () -> ScaleConfigSchema.normalizeDataField(
+                "SBUS", Map.of("is_used", true, "response_type", "FLOAT32", "word_order", "REVERSE")));
+    }
 }

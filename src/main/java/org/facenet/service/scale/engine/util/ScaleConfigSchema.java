@@ -5,6 +5,10 @@ import org.facenet.common.exception.ValidationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Locale;
+import java.nio.charset.Charset;
+import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /** Canonicalizes the JSON configuration accepted by both Modbus engines. */
 public final class ScaleConfigSchema {
@@ -26,7 +30,9 @@ public final class ScaleConfigSchema {
         copyAlias(normalized, "start_registers", "start_register", "register_start");
         copyAlias(normalized, "num_registers", "register_count");
         copyAlias(normalized, "tag_address", "address", "tag", "plc_address");
-        copyAlias(normalized, "command", "sabus_command");
+        copyAlias(normalized, "command", "sabus_command", "request", "request_command");
+        copyAlias(normalized, "response_pattern", "regex", "extract_pattern");
+        copyAlias(normalized, "value_type", "result_type");
 
         String normalizedProtocol = normalizeProtocol(protocol);
 
@@ -61,6 +67,10 @@ public final class ScaleConfigSchema {
                     throw new ValidationException("Enabled SABUS data field requires command FL or NT");
                 }
                 normalized.put("command", command.toUpperCase(Locale.ROOT));
+            } else if (isSbus(normalizedProtocol)) {
+                validateSbusDataField(normalized);
+            } else if (isSerial(normalizedProtocol)) {
+                validateSerialDataField(normalized);
             }
         }
 
@@ -169,6 +179,59 @@ public final class ScaleConfigSchema {
             normalized.putIfAbsent("command_terminator", "\\r");
         }
 
+        if (isSerial(normalizedProtocol)) {
+            copyAlias(normalized, "com_port", "serial_port", "port_name");
+            String comPort = asText(normalized.get("com_port"));
+            Integer baudRate = asInteger(normalized.get("baud_rate"));
+            Integer dataBits = asInteger(normalized.getOrDefault("data_bits", 8));
+            String stopBits = asText(normalized.getOrDefault("stop_bits", 1));
+            String parity = asText(normalized.getOrDefault("parity", "NONE"));
+            String charset = asText(normalized.getOrDefault("charset", "US-ASCII"));
+            Integer maximum = asInteger(normalized.getOrDefault("max_response_bytes", 1024));
+
+            if (comPort == null) throw new ValidationException("Serial connection requires com_port");
+            if (baudRate == null || baudRate <= 0) {
+                throw new ValidationException("Serial connection requires baud_rate > 0");
+            }
+            if (dataBits == null || dataBits < 5 || dataBits > 8) {
+                throw new ValidationException("Serial data_bits must be between 5 and 8");
+            }
+            if (stopBits == null || !Set.of("1", "1.0", "1.5", "2", "2.0").contains(stopBits)) {
+                throw new ValidationException("Serial stop_bits must be 1, 1.5 or 2");
+            }
+            if (stopBits.equals("1.0")) stopBits = "1";
+            if (stopBits.equals("2.0")) stopBits = "2";
+            if (parity == null || !Set.of("NONE", "EVEN", "ODD", "MARK", "SPACE")
+                    .contains(parity.toUpperCase(Locale.ROOT))) {
+                throw new ValidationException("Serial parity must be NONE, EVEN, ODD, MARK or SPACE");
+            }
+            try {
+                if (charset == null || !Charset.isSupported(charset)) {
+                    throw new ValidationException("Serial charset is not supported");
+                }
+            } catch (IllegalArgumentException exception) {
+                throw new ValidationException("Serial charset is not supported");
+            }
+            if (maximum == null || maximum < 1 || maximum > 1_048_576) {
+                throw new ValidationException("Serial max_response_bytes must be between 1 and 1048576");
+            }
+
+            normalized.put("com_port", comPort);
+            normalized.put("baud_rate", baudRate);
+            normalized.put("data_bits", dataBits);
+            normalized.put("stop_bits", stopBits);
+            normalized.put("parity", parity.toUpperCase(Locale.ROOT));
+            normalized.put("charset", charset);
+            normalized.put("max_response_bytes", maximum);
+            normalized.putIfAbsent("response_timeout_ms", 3000);
+            normalized.putIfAbsent("reconnect_delay_ms", 5000);
+            normalized.putIfAbsent("offline_threshold_ms", 60000);
+            normalized.putIfAbsent("command_prefix", "");
+            normalized.putIfAbsent("command_terminator", "\\r");
+            normalized.putIfAbsent("response_terminator", "\\r");
+            normalized.putIfAbsent("strip_echo", true);
+        }
+
         return normalized;
     }
 
@@ -188,6 +251,75 @@ public final class ScaleConfigSchema {
 
     private static boolean isSabus(String protocol) {
         return protocol.equals("SABUS") || protocol.equals("SABUS_ASCII");
+    }
+
+    private static boolean isSbus(String protocol) {
+        return protocol.equals("SBUS") || protocol.equals("S-BUS") || protocol.equals("S_BUS")
+                || protocol.equals("MODBUS_SBUS") || protocol.equals("MODBUSSBUS");
+    }
+
+    private static boolean isSerial(String protocol) {
+        return protocol.equals("SERIAL") || protocol.equals("SERIAL_ASCII");
+    }
+
+    private static void validateSbusDataField(Map<String, Object> field) {
+        String responseType = asText(field.getOrDefault("response_type", "UINT16"));
+        Set<String> supportedTypes = Set.of(
+                "INT16", "SHORT", "UINT16", "WORD",
+                "INT32", "DINT", "UINT32", "DWORD",
+                "INT64", "LINT", "LONG", "UINT64", "LWORD",
+                "FLOAT32", "FLOAT", "REAL", "FLOAT64", "DOUBLE", "LREAL");
+        if (responseType == null || !supportedTypes.contains(responseType.toUpperCase(Locale.ROOT))) {
+            throw new ValidationException("Unsupported S-Bus response_type");
+        }
+
+        String byteOrder = asText(field.getOrDefault("byte_order", "BIG_ENDIAN"));
+        String wordOrder = asText(field.getOrDefault("word_order", "BIG_ENDIAN"));
+        Set<String> byteOrders = Set.of("BIG_ENDIAN", "LITTLE_ENDIAN", "BIG", "LITTLE", "BE", "LE",
+                "ABCD", "BADC", "CDAB", "DCBA", "WORD_SWAP");
+        Set<String> wordOrders = Set.of("BIG_ENDIAN", "LITTLE_ENDIAN", "BIG", "LITTLE", "BE", "LE",
+                "HIGH_FIRST", "LOW_FIRST", "MSW_FIRST", "LSW_FIRST");
+        if (byteOrder == null || !byteOrders.contains(byteOrder.toUpperCase(Locale.ROOT))) {
+            throw new ValidationException("Unsupported S-Bus byte_order");
+        }
+        if (wordOrder == null || !wordOrders.contains(wordOrder.toUpperCase(Locale.ROOT))) {
+            throw new ValidationException("Unsupported S-Bus word_order");
+        }
+        field.put("response_type", responseType.toUpperCase(Locale.ROOT));
+        field.put("byte_order", byteOrder.toUpperCase(Locale.ROOT));
+        field.put("word_order", wordOrder.toUpperCase(Locale.ROOT));
+    }
+
+    private static void validateSerialDataField(Map<String, Object> field) {
+        String pattern = asText(field.get("response_pattern"));
+        if (pattern != null) {
+            try {
+                if (Pattern.compile(pattern).matcher("").groupCount() < 1) {
+                    throw new ValidationException("Serial response_pattern requires a capture group");
+                }
+            } catch (PatternSyntaxException exception) {
+                throw new ValidationException("Serial response_pattern is invalid");
+            }
+        }
+
+        Integer valueIndex = asInteger(field.get("value_index"));
+        if (field.get("value_index") != null && (valueIndex == null || valueIndex < 0)) {
+            throw new ValidationException("Serial value_index must be >= 0");
+        }
+        Integer start = asInteger(field.get("start_index"));
+        Integer length = asInteger(field.get("length"));
+        if (field.get("start_index") != null && (start == null || start < 0)) {
+            throw new ValidationException("Serial start_index must be >= 0");
+        }
+        if (field.get("length") != null && (length == null || length <= 0)) {
+            throw new ValidationException("Serial length must be > 0");
+        }
+        String valueType = asText(field.getOrDefault("value_type", field.getOrDefault("data_type", "NUMBER")));
+        if (valueType == null || !Set.of("NUMBER", "DECIMAL", "TEXT", "STRING")
+                .contains(valueType.toUpperCase(Locale.ROOT))) {
+            throw new ValidationException("Serial value_type must be NUMBER or TEXT");
+        }
+        field.put("value_type", valueType.toUpperCase(Locale.ROOT));
     }
 
     private static void copyAlias(Map<String, Object> target, String canonical, String... aliases) {

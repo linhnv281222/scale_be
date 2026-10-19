@@ -11,8 +11,9 @@ Tài liệu này hướng dẫn kiểm tra chức năng cấu hình cân và xá
 | S-Bus dạng frame | `SBUS` | Serial |
 | SABUS ASCII | `SABUS` | Serial, lệnh `FL`/`NT` |
 | Siemens S7 | `SIEMENS_S7` | ISO-on-TCP, mặc định cổng 102 |
+| Serial ASCII tổng quát | `SERIAL` | Serial, streaming hoặc request/response |
 
-> `SERIAL` chưa có engine đọc dữ liệu và không dùng để test. Khi cấu hình `protocol: "SERIAL"`, backend sẽ báo `Serial protocol not implemented yet`.
+> `SERIAL` dùng cho thiết bị ASCII không thuộc Modbus/S-Bus/SABUS. Engine hỗ trợ thiết bị tự phát frame liên tục và thiết bị cần gửi lệnh trước khi đọc.
 
 ## 2. Cách hệ thống áp dụng cấu hình
 
@@ -345,7 +346,9 @@ Với dữ liệu sai nhưng kết nối được, thử lần lượt `byte_ord
     "command": "READ_WEIGHT",
     "payload": "",
     "mode": "ASCII",
-    "response_type": "FLOAT32"
+    "response_type": "FLOAT32",
+    "byte_order": "BIG_ENDIAN",
+    "word_order": "LITTLE_ENDIAN"
   },
   "data_2": { "is_used": false },
   "data_3": { "is_used": false },
@@ -362,7 +365,18 @@ Có thể dùng `opcode` dạng hex thay cho `command`, ví dụ `"opcode": "0x5
 | `ZERO` | `0x5A` |
 | `TARE` | `0x54` |
 
-`mode` hỗ trợ `ASCII` hoặc binary. `response_type` hỗ trợ `INT16`, `UINT16`, `FLOAT32`/`FLOAT`.
+`mode` hỗ trợ `ASCII` hoặc binary. `response_type` hỗ trợ số signed/unsigned 16, 32, 64-bit và `FLOAT32`/`FLOAT64`.
+
+S-Bus dùng cùng quy ước thứ tự byte/thanh ghi với Modbus:
+
+| Layout thiết bị | Cấu hình |
+|---|---|
+| `ABCD` | `byte_order: BIG_ENDIAN`, `word_order: BIG_ENDIAN` |
+| `BADC` | `byte_order: LITTLE_ENDIAN`, `word_order: BIG_ENDIAN` |
+| `CDAB` | `byte_order: BIG_ENDIAN`, `word_order: LITTLE_ENDIAN` |
+| `DCBA` | `byte_order: LITTLE_ENDIAN`, `word_order: LITTLE_ENDIAN` |
+
+Có thể khai báo trực tiếp alias trong `byte_order`, ví dụ `"byte_order": "CDAB"`. Nếu không khai báo, engine giữ hành vi cũ là `BIG_ENDIAN/BIG_ENDIAN`.
 
 ### 7.2. Lưu ý khi đánh giá
 
@@ -376,7 +390,8 @@ Có thể dùng `opcode` dạng hex thay cho `command`, ví dụ `"opcode": "0x5
 1. Lệnh `READ_WEIGHT` ở ASCII trả đúng giá trị.
 2. Cấu hình bằng `opcode: 0x57` cho kết quả tương đương.
 3. Test binary với đúng `response_length` theo thiết bị.
-4. Sai Device ID hoặc opcode: giá trị phải rỗng/null và log phải có lỗi đọc command.
+4. Test giá trị 32-bit với cả word cao trước và word thấp trước.
+5. Sai Device ID hoặc opcode: giá trị phải rỗng/null và log phải có lỗi đọc command.
 
 ## 8. Test SABUS ASCII (`SABUS`)
 
@@ -523,9 +538,48 @@ Nếu response của thiết bị khác chuẩn trên, có thể tách số bằ
 3. Sai rack/slot hoặc tắt PLC: engine reconnect và sau khoảng 60 giây phát `OFFLINE`.
 4. Bật nhiều tag ở `data_1` đến `data_5`: mọi tag đều có đúng tên và giá trị.
 
-## 10. Biến đổi giá trị dùng chung
+## 10. Test Serial ASCII tổng quát (`SERIAL`)
 
-Các field numeric của Modbus, SABUS và Siemens S7 có thể dùng:
+Cấu hình request/response mẫu, gửi lệnh `W\r` và lấy số từ phản hồi như `ST,GS,+00123.45 kg\r`:
+
+```json
+{
+  "protocol": "SERIAL",
+  "poll_interval": 1000,
+  "conn_params": {
+    "com_port": "COM5",
+    "baud_rate": 9600,
+    "data_bits": 8,
+    "stop_bits": 1,
+    "parity": "NONE",
+    "charset": "US-ASCII",
+    "command_terminator": "\\r",
+    "response_terminator": "\\r",
+    "response_timeout_ms": 3000,
+    "strip_echo": true
+  },
+  "data_1": {
+    "name": "Weight",
+    "command": "W",
+    "response_pattern": "([+-]?[0-9]+(?:[.,][0-9]+)?)",
+    "value_type": "NUMBER",
+    "is_used": true
+  }
+}
+```
+
+Với thiết bị tự phát dữ liệu liên tục, bỏ `command` khỏi data field. Nhiều data field không có `command` sẽ cùng parse một frame nhận được. Có bốn cách lấy giá trị:
+
+- `response_pattern`: regex có ít nhất một capture group; group đầu tiên là giá trị.
+- `delimiter` và `value_index`: tách frame thành các cột.
+- `start_index` và `length`: lấy vùng ký tự cố định.
+- Không khai báo cách parse: tự lấy số đầu tiên trong frame.
+
+Đặt `value_type: "TEXT"` để giữ chuỗi thay vì parse số. Các chuỗi escape `\r`, `\n`, `\t` được hỗ trợ trong command và terminator.
+
+## 11. Biến đổi giá trị dùng chung
+
+Các field numeric của Modbus, SABUS, Serial và Siemens S7 có thể dùng:
 
 ```json
 {
@@ -544,7 +598,7 @@ giá trị đọc -> multiplier/scale -> divisor -> offset -> formula -> decimal
 
 Chỉ cấu hình các phép biến đổi thực sự cần thiết. `divisor` không được bằng 0; `decimal_places` phải từ 0 đến 12. Khi nghiệm thu nên ghi cả giá trị thô trên simulator/PLC và giá trị kỳ vọng sau biến đổi.
 
-## 11. Gửi cấu hình bằng PowerShell
+## 12. Gửi cấu hình bằng PowerShell
 
 Lưu một JSON mẫu ở trên vào biến `$body`, sau đó gửi:
 
@@ -591,7 +645,7 @@ Invoke-RestMethod `
 
 Sau khi PUT thành công, gọi lại `GET /scales/{id}` để chắc chắn cấu hình đã được normalize và lưu đúng.
 
-## 12. Test validation khi lưu cấu hình
+## 13. Test validation khi lưu cấu hình
 
 Các ca âm nên thực hiện cho màn hình/API cấu hình:
 
@@ -606,9 +660,11 @@ Các ca âm nên thực hiện cho màn hình/API cấu hình:
 | S7 bật field nhưng thiếu `tag_address` | HTTP 400 |
 | SABUS thiếu COM/baud/device ID | HTTP 400 |
 | SABUS bật field với command khác `FL`/`NT` | HTTP 400 |
+| Serial thiếu COM/baud hoặc dùng data bits/stop bits/parity không hợp lệ | HTTP 400 |
+| Serial dùng regex không hợp lệ hoặc không có capture group | HTTP 400 |
 | `protocol` không được EngineFactory hỗ trợ | Có thể lưu nếu schema không chặn, nhưng engine không khởi động và log báo `Unsupported protocol` |
 
-## 13. Checklist nghiệm thu cho mỗi giao thức
+## 14. Checklist nghiệm thu cho mỗi giao thức
 
 - [ ] Protocol xuất hiện đúng trong danh mục.
 - [ ] `protocol_id` và `protocol` cùng chỉ một giao thức.
@@ -625,7 +681,7 @@ Các ca âm nên thực hiện cho màn hình/API cấu hình:
 - [ ] Kết nối lại thì dữ liệu tự phục hồi.
 - [ ] Cấu hình sai bị validation từ chối hoặc có log lỗi rõ ràng.
 
-## 14. Xử lý lỗi nhanh
+## 15. Xử lý lỗi nhanh
 
 | Hiện tượng | Kiểm tra |
 |---|---|
@@ -640,12 +696,12 @@ Các ca âm nên thực hiện cho màn hình/API cấu hình:
 | Không có history ngay | Chờ batch persistence, kiểm tra current state/WebSocket trước |
 | Chỉ một trong nhiều cân RTU/SABUS lỗi | Kiểm tra riêng Unit ID/device ID; bus dùng chung vẫn phải đọc các cân khác |
 
-## 15. Chạy unit test không cần thiết bị thật
+## 16. Chạy unit test không cần thiết bị thật
 
-Các test này xác nhận validation/normalize cấu hình, chuyển đổi thanh ghi Modbus, gom bus RTU, tạo và parse lệnh SABUS, và tạo connection string Siemens S7:
+Các test này xác nhận validation/normalize cấu hình, chuyển đổi thanh ghi Modbus, gom bus RTU, tạo và parse lệnh SABUS/Serial, và tạo connection string Siemens S7:
 
 ```powershell
-mvn '-Dtest=ScaleConfigSchemaTest,ModbusRtuEngineTest,SabusAsciiEngineTest,SiemensS7EngineTest,ModbusDataConverterTest' test
+mvn '-Dtest=ScaleConfigSchemaTest,ModbusRtuEngineTest,SbusEngineTest,SabusAsciiEngineTest,SerialEngineTest,SiemensS7EngineTest,ModbusDataConverterTest' test
 ```
 
 Kết quả đạt khi Maven báo `BUILD SUCCESS` và không có failure/error. Unit test không thay thế test tích hợp với cân, gateway hoặc PLC thật; nó không xác nhận dây nối, firewall, serial driver hay register/tag của thiết bị.

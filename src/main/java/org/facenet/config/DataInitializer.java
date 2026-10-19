@@ -36,6 +36,7 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) throws Exception {
         ensureSabusProtocol();
+        ensureSerialProtocol();
         if (userRepository.count() > 0) {
             ensureFeatureRbac();
             log.info("Data already initialized, skipping...");
@@ -189,6 +190,44 @@ public class DataInitializer implements CommandLineRunner {
                   "data_2": {
                     "name": "Accumulated Total",
                     "command": "NT",
+                    "is_used": true
+                  }
+                }
+                """);
+        protocolRepository.save(protocol);
+    }
+
+    private void ensureSerialProtocol() {
+        Protocol protocol = protocolRepository.findByCode("SERIAL").orElseGet(Protocol::new);
+        protocol.setCode("SERIAL");
+        protocol.setName("Generic Serial ASCII");
+        protocol.setDescription("Configurable serial ASCII protocol for streaming and request/response scales");
+        protocol.setConnectionType("SERIAL");
+        protocol.setDefaultBaudRate(9600);
+        protocol.setIsActive(true);
+        protocol.setConfigTemplate("""
+                {
+                  "conn_params": {
+                    "com_port": "COM1",
+                    "baud_rate": 9600,
+                    "data_bits": 8,
+                    "stop_bits": 1,
+                    "parity": "NONE",
+                    "charset": "US-ASCII",
+                    "response_timeout_ms": 3000,
+                    "reconnect_delay_ms": 5000,
+                    "offline_threshold_ms": 60000,
+                    "command_prefix": "",
+                    "command_terminator": "\\r",
+                    "response_terminator": "\\r",
+                    "strip_echo": true,
+                    "max_response_bytes": 1024
+                  },
+                  "data_1": {
+                    "name": "Weight",
+                    "command": "W",
+                    "response_pattern": "([+-]?[0-9]+(?:[.,][0-9]+)?)",
+                    "value_type": "NUMBER",
                     "is_used": true
                   }
                 }

@@ -15,7 +15,7 @@ import java.util.concurrent.BlockingQueue;
  * - MODBUS_RTU: Kết nối qua Serial (COM port/RS485)
  * - MODBUS_SBUS: S-Bus protocol (SAIA S-Bus over Serial)
  * - SABUS: Scale-specific ASCII protocol using FL/NT commands
- * - SERIAL: (Future) Giao thức Serial đơn giản
+ * - SERIAL: Generic serial ASCII, streaming or request/response
  */
 @Slf4j
 public class EngineFactory {
@@ -70,9 +70,8 @@ public class EngineFactory {
                 return new SiemensS7Engine(config, queue);
                 
             case "SERIAL":
-                // TODO: Implement SerialEngine cho giao thức Serial thuần
-                log.warn("Serial protocol not fully implemented yet for scale {}", config.getScaleId());
-                throw new IllegalArgumentException("Serial protocol not implemented yet");
+            case "SERIAL_ASCII":
+                return new SerialEngine(config, queue);
                 
             default:
                 throw new IllegalArgumentException("Unsupported protocol: " + protocol + " for scale " + config.getScaleId());

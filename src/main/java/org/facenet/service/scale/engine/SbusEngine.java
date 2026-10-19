@@ -11,8 +11,12 @@ import org.facenet.service.scale.engine.util.ProtocolRuntimeDependencies;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -166,13 +170,12 @@ public class SbusEngine implements ScaleEngine {
             String mode = getDataConfigParam(dataConfig, "mode");
             if (mode == null) mode = "ASCII";
             
-            String responseType = getDataConfigParam(dataConfig, "response_type");
             Integer responseLength = getDataConfigParam(dataConfig, "response_length");
             
             if ("ASCII".equalsIgnoreCase(mode)) {
-                return sendCommandASCII(deviceId, opcode, payload, responseType);
+                return sendCommandASCII(deviceId, opcode, payload, dataConfig);
             } else {
-                return sendCommandBinary(deviceId, opcode, payload, responseType, responseLength);
+                return sendCommandBinary(deviceId, opcode, payload, dataConfig, responseLength);
             }
             
         } catch (Exception e) {
@@ -195,7 +198,7 @@ public class SbusEngine implements ScaleEngine {
         }
     }
     
-    private String sendCommandASCII(int deviceId, byte opcode, String payload, String responseType) 
+    private String sendCommandASCII(int deviceId, byte opcode, String payload, Map<String, Object> dataConfig)
             throws IOException, InterruptedException {
         OutputStream out = serialPort.getOutputStream();
         InputStream in = serialPort.getInputStream();
@@ -237,14 +240,14 @@ public class SbusEngine implements ScaleEngine {
         int dataEnd = response.indexOf((char) END_BYTE);
         if (dataEnd > dataStart + 2) {
             String dataHex = response.substring(dataStart, dataEnd - 2);
-            return parseHexData(dataHex, responseType);
+            return parseHexData(dataHex, dataConfig);
         }
         
         return null;
     }
     
     private String sendCommandBinary(int deviceId, byte opcode, String payload, 
-                                      String responseType, Integer responseLength) 
+                                      Map<String, Object> dataConfig, Integer responseLength)
             throws IOException, InterruptedException {
         OutputStream out = serialPort.getOutputStream();
         InputStream in = serialPort.getInputStream();
@@ -281,79 +284,138 @@ public class SbusEngine implements ScaleEngine {
         }
         
         if (dataLength > 0) {
-            return parseBinaryData(buffer, 3, dataLength, responseType);
+            return parseBinaryData(buffer, 3, dataLength, dataConfig);
         }
         
         return null;
     }
     
-    private String parseHexData(String hexData, String responseType) {
+    static String parseHexData(String hexData, Map<String, Object> dataConfig) {
         try {
             if (hexData == null || hexData.isEmpty()) return null;
+            String responseType = text(dataConfig, "response_type");
             if (responseType == null) return hexData;
-            
-            switch (responseType.toUpperCase(Locale.ROOT)) {
-                case "INT16":
-                    if (hexData.length() >= 4) {
-                        short value = (short) Integer.parseInt(hexData.substring(0, 4), 16);
-                        return String.valueOf(value);
-                    }
-                    break;
-                case "UINT16":
-                    if (hexData.length() >= 4) {
-                        int value = Integer.parseInt(hexData.substring(0, 4), 16);
-                        return String.valueOf(value);
-                    }
-                    break;
-                case "FLOAT32":
-                case "FLOAT":
-                    if (hexData.length() >= 8) {
-                        int bits = (int) Long.parseLong(hexData.substring(0, 8), 16);
-                        float value = Float.intBitsToFloat(bits);
-                        return String.valueOf(value);
-                    }
-                    break;
-            }
-            return hexData;
+
+            byte[] bytes = hexStringToBytesStatic(hexData);
+            return decodeResponse(bytes, dataConfig);
         } catch (Exception e) {
             return hexData;
         }
     }
     
-    private String parseBinaryData(byte[] buffer, int offset, int length, String responseType) {
+    static String parseBinaryData(byte[] buffer, int offset, int length, Map<String, Object> dataConfig) {
         try {
             if (length == 0) return null;
-            if (responseType == null) responseType = "UINT16";
-            
-            switch (responseType.toUpperCase(Locale.ROOT)) {
-                case "INT16":
-                    if (length >= 2) {
-                        short value = (short) (((buffer[offset] & 0xFF) << 8) | (buffer[offset + 1] & 0xFF));
-                        return String.valueOf(value);
-                    }
-                    break;
-                case "UINT16":
-                    if (length >= 2) {
-                        int value = ((buffer[offset] & 0xFF) << 8) | (buffer[offset + 1] & 0xFF);
-                        return String.valueOf(value);
-                    }
-                    break;
-                case "FLOAT32":
-                case "FLOAT":
-                    if (length >= 4) {
-                        int bits = ((buffer[offset] & 0xFF) << 24) | 
-                                   ((buffer[offset + 1] & 0xFF) << 16) |
-                                   ((buffer[offset + 2] & 0xFF) << 8) | 
-                                   (buffer[offset + 3] & 0xFF);
-                        float value = Float.intBitsToFloat(bits);
-                        return String.valueOf(value);
-                    }
-                    break;
+            Map<String, Object> effectiveConfig = dataConfig;
+            if (text(dataConfig, "response_type") == null) {
+                effectiveConfig = new java.util.LinkedHashMap<>(dataConfig == null ? Map.of() : dataConfig);
+                effectiveConfig.put("response_type", "UINT16");
             }
-            return null;
+            return decodeResponse(Arrays.copyOfRange(buffer, offset, offset + length), effectiveConfig);
         } catch (Exception e) {
             return null;
         }
+    }
+
+    static String decodeResponse(byte[] response, Map<String, Object> dataConfig) {
+        if (response == null || response.length == 0) return null;
+        String responseType = text(dataConfig, "response_type");
+        if (responseType == null) return bytesToHex(response);
+
+        byte[] bytes = orderedBytes(response, dataConfig);
+        String type = responseType.toUpperCase(Locale.ROOT);
+        ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
+        Object decoded = switch (type) {
+            case "INT16", "SHORT" -> require(buffer, 2).getShort();
+            case "UINT16", "WORD" -> Short.toUnsignedInt(require(buffer, 2).getShort());
+            case "INT32", "DINT" -> require(buffer, 4).getInt();
+            case "UINT32", "DWORD" -> Integer.toUnsignedLong(require(buffer, 4).getInt());
+            case "INT64", "LINT", "LONG" -> require(buffer, 8).getLong();
+            case "UINT64", "LWORD" -> new BigInteger(1, Arrays.copyOf(bytes, 8));
+            case "FLOAT32", "FLOAT", "REAL" -> require(buffer, 4).getFloat();
+            case "FLOAT64", "DOUBLE", "LREAL" -> require(buffer, 8).getDouble();
+            default -> throw new IllegalArgumentException("Unsupported S-Bus response_type: " + responseType);
+        };
+        return String.valueOf(decoded);
+    }
+
+    static byte[] orderedBytes(byte[] response, Map<String, Object> dataConfig) {
+        if (response.length % 2 != 0) {
+            throw new IllegalArgumentException("S-Bus numeric response must contain complete 16-bit words");
+        }
+        String byteOrder = valueOrDefault(text(dataConfig, "byte_order"), "BIG_ENDIAN").toUpperCase(Locale.ROOT);
+        String wordOrder = valueOrDefault(text(dataConfig, "word_order"), "BIG_ENDIAN").toUpperCase(Locale.ROOT);
+
+        if (byteOrder.equals("ABCD") || byteOrder.equals("BIG") || byteOrder.equals("BE")) {
+            byteOrder = "BIG_ENDIAN";
+        } else if (byteOrder.equals("BADC")) {
+            byteOrder = "LITTLE_ENDIAN";
+            wordOrder = "BIG_ENDIAN";
+        } else if (byteOrder.equals("CDAB") || byteOrder.equals("WORD_SWAP")) {
+            byteOrder = "BIG_ENDIAN";
+            wordOrder = "LITTLE_ENDIAN";
+        } else if (byteOrder.equals("DCBA") || byteOrder.equals("LITTLE") || byteOrder.equals("LE")) {
+            byteOrder = "LITTLE_ENDIAN";
+            wordOrder = "LITTLE_ENDIAN";
+        }
+
+        byte[] ordered = Arrays.copyOf(response, response.length);
+        if (isLittle(byteOrder)) {
+            for (int index = 0; index < ordered.length; index += 2) {
+                byte swap = ordered[index];
+                ordered[index] = ordered[index + 1];
+                ordered[index + 1] = swap;
+            }
+        }
+        if (isLittle(wordOrder)) {
+            for (int left = 0, right = ordered.length - 2; left < right; left += 2, right -= 2) {
+                byte high = ordered[left];
+                byte low = ordered[left + 1];
+                ordered[left] = ordered[right];
+                ordered[left + 1] = ordered[right + 1];
+                ordered[right] = high;
+                ordered[right + 1] = low;
+            }
+        }
+        return ordered;
+    }
+
+    private static boolean isLittle(String value) {
+        return value.equals("LITTLE_ENDIAN") || value.equals("LITTLE") || value.equals("LE")
+                || value.equals("LOW_FIRST") || value.equals("LSW_FIRST");
+    }
+
+    private static ByteBuffer require(ByteBuffer buffer, int length) {
+        if (buffer.remaining() < length) {
+            throw new IllegalArgumentException("S-Bus response type requires " + length
+                    + " bytes, got " + buffer.remaining());
+        }
+        return buffer;
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder result = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) result.append(String.format("%02X", value & 0xFF));
+        return result.toString();
+    }
+
+    private static byte[] hexStringToBytesStatic(String hexString) {
+        String cleaned = hexString.replace(" ", "").replace("0x", "").replace("0X", "");
+        if (cleaned.length() % 2 != 0) throw new IllegalArgumentException("Hex response must contain complete bytes");
+        byte[] data = new byte[cleaned.length() / 2];
+        for (int index = 0; index < cleaned.length(); index += 2) {
+            data[index / 2] = (byte) Integer.parseInt(cleaned.substring(index, index + 2), 16);
+        }
+        return data;
+    }
+
+    private static String text(Map<String, Object> values, String key) {
+        if (values == null || values.get(key) == null || values.get(key).toString().isBlank()) return null;
+        return values.get(key).toString().trim();
+    }
+
+    private static String valueOrDefault(String value, String fallback) {
+        return value == null ? fallback : value;
     }
     
     private byte[] hexStringToBytes(String hexString) {
